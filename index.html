@@ -118,7 +118,7 @@ header{padding:18px 40px;display:flex;align-items:center;justify-content:space-b
 <body>
 <header>
   <div class="logo">Snap<span>Insight</span></div>
-  <div class="powered">Powered by SnapTrade API + Claude AI</div>
+  <div class="powered">Powered by SnapTrade API</div>
   <div class="built-by">Built by <a href="https://github.com/iamvk07" target="_blank">Vedant Kadam</a></div>
 </header>
 <div class="main">
@@ -166,7 +166,7 @@ header{padding:18px 40px;display:flex;align-items:center;justify-content:space-b
       <div class="stat-card"><div class="sc-label">Brokerage</div><div class="sc-val" id="acctType" style="font-size:16px;">—</div><div class="sc-sub" id="acctSub">Connected</div></div>
     </div>
     <div class="ai-card">
-      <div class="ai-head"><span style="font-size:16px">✦</span><span class="ai-title">AI Portfolio Analysis</span><span class="ai-badge">Claude AI</span></div>
+      <div class="ai-head"><span style="font-size:16px">✦</span><span class="ai-title">Portfolio Analysis</span><span class="ai-badge">Auto Insights</span></div>
       <div class="ai-body">
         <div class="ai-thinking" id="aiThinking"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span>Analyzing your portfolio...</span></div>
         <div class="ai-text" id="aiText" style="display:none;"></div>
@@ -391,31 +391,54 @@ function renderTx(txs) {
 async function runAI() {
   const pd=window._pd; if(!pd) return;
   const {pos,cash,grand,byType}=pd;
-  const top=pos.sort((a,b)=>(b.price*b.units)-(a.price*a.units)).slice(0,5)
-    .map(p=>`${p.symbol?.symbol}:$${fmt(p.price*p.units)}(${(p.price*p.units/grand*100).toFixed(1)}%)`).join(', ');
-  const alloc=Object.entries(byType).map(([t,v])=>`${t}:${(v/grand*100).toFixed(1)}%`).join(', ');
-  const prompt=`Analyze this investment portfolio and give 3-4 sentences of specific actionable insights covering: overall health, concentration risk if any, one clear recommendation. Be direct. Use <strong> tags for key points.
+  const insights=[];
 
-Portfolio: Total $${fmt(grand)}, Cash $${fmt(cash)} (${grand>0?(cash/grand*100).toFixed(1):0}%), ${pos.length} positions
-Allocation: ${alloc}
-Top holdings: ${top||'No positions yet'}`;
-  try {
-    const r=await fetch(`${PROXY}/ai`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({prompt})
-    });
-    const d=await r.json();
-    const txt=d.content?.[0]?.text||d.error||'Analysis unavailable.';
-    document.getElementById('aiThinking').style.display='none';
-    document.getElementById('aiText').innerHTML=txt;
-    document.getElementById('aiText').style.display='block';
-    document.getElementById('aiMetrics').innerHTML=`<span class="ai-metric">Positions: <span>${pos.length}</span></span><span class="ai-metric">Cash: <span>${grand>0?(cash/grand*100).toFixed(1):0}%</span></span><span class="ai-metric">Types: <span>${Object.keys(byType).length}</span></span>`;
-    document.getElementById('aiMetrics').style.display='flex';
-  } catch(e) {
-    document.getElementById('aiThinking').style.display='none';
-    document.getElementById('aiText').innerHTML='<strong>Portfolio loaded.</strong> AI analysis requires Claude API key configured server-side.';
-    document.getElementById('aiText').style.display='block';
+  if(!pos.length){
+    insights.push('<strong>No positions found.</strong> Your account is connected but has no holdings yet. Add trades in your Alpaca paper account to see analysis.');
+  } else {
+    // Concentration risk
+    const sorted=[...pos].sort((a,b)=>(b.price*b.units)-(a.price*a.units));
+    const top=sorted[0];
+    const topPct=grand>0?(top.price*top.units)/grand*100:0;
+    if(topPct>40){
+      insights.push(`<strong>High concentration risk:</strong> ${top.symbol?.symbol} makes up ${topPct.toFixed(1)}% of your portfolio. Consider trimming to reduce single-stock exposure.`);
+    } else if(topPct>25){
+      insights.push(`<strong>Moderate concentration:</strong> ${top.symbol?.symbol} is your largest position at ${topPct.toFixed(1)}%. This is manageable but worth monitoring.`);
+    } else {
+      insights.push(`<strong>Well distributed:</strong> Your largest position (${top.symbol?.symbol}) is only ${topPct.toFixed(1)}% of the portfolio — good concentration control.`);
+    }
+
+    // Cash ratio
+    const cashPct=grand>0?cash/grand*100:0;
+    if(cashPct>50){
+      insights.push(`<strong>High cash drag:</strong> ${cashPct.toFixed(1)}% of your portfolio is sitting in cash. Consider deploying it to improve returns.`);
+    } else if(cashPct<5 && pos.length>0){
+      insights.push(`<strong>Fully invested:</strong> Only ${cashPct.toFixed(1)}% cash. Keeping a small cash buffer (5–10%) helps manage volatility.`);
+    } else {
+      insights.push(`<strong>Healthy cash balance:</strong> ${cashPct.toFixed(1)}% cash gives you flexibility to buy dips without being over-exposed.`);
+    }
+
+    // Diversification by type
+    const types=Object.keys(byType).filter(t=>t!=='cash');
+    if(types.length===1){
+      insights.push(`<strong>Single asset class:</strong> All your holdings are ${types[0].toUpperCase()}. Adding other asset types (ETFs, bonds, or international stocks) would improve diversification.`);
+    } else if(types.length>=3){
+      insights.push(`<strong>Good diversification:</strong> You hold across ${types.length} asset types (${types.join(', ')}), which helps reduce overall portfolio risk.`);
+    }
+
+    // Position count
+    if(pos.length<3){
+      insights.push(`<strong>Thin portfolio:</strong> Only ${pos.length} position${pos.length===1?'':'s'} — a small number of holdings increases individual stock risk.`);
+    } else if(pos.length>15){
+      insights.push(`<strong>Broad exposure:</strong> With ${pos.length} positions you're well diversified, though tracking this many holdings takes effort.`);
+    }
   }
+
+  document.getElementById('aiThinking').style.display='none';
+  document.getElementById('aiText').innerHTML=insights.join(' ');
+  document.getElementById('aiText').style.display='block';
+  document.getElementById('aiMetrics').innerHTML=`<span class="ai-metric">Positions: <span>${pos.length}</span></span><span class="ai-metric">Cash: <span>${grand>0?(cash/grand*100).toFixed(1):0}%</span></span><span class="ai-metric">Types: <span>${Object.keys(byType).filter(t=>t!=='cash').length}</span></span>`;
+  document.getElementById('aiMetrics').style.display='flex';
 }
 
 function disconnect(){C={};window._pd=null;document.getElementById('dashboard').style.display='none';document.getElementById('connectCard').style.display='grid';document.getElementById('aiThinking').style.display='flex';document.getElementById('aiText').style.display='none';document.getElementById('aiMetrics').style.display='none';}
