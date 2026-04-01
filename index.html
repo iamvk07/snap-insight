@@ -400,12 +400,12 @@ Portfolio: Total $${fmt(grand)}, Cash $${fmt(cash)} (${grand>0?(cash/grand*100).
 Allocation: ${alloc}
 Top holdings: ${top||'No positions yet'}`;
   try {
-    const r=await fetch('https://api.anthropic.com/v1/messages',{
+    const r=await fetch(`${PROXY}/ai`,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({prompt})
     });
     const d=await r.json();
-    const txt=d.content?.[0]?.text||'Analysis unavailable.';
+    const txt=d.content?.[0]?.text||d.error||'Analysis unavailable.';
     document.getElementById('aiThinking').style.display='none';
     document.getElementById('aiText').innerHTML=txt;
     document.getElementById('aiText').style.display='block';
