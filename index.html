@@ -240,10 +240,14 @@ async function api(path, extra={}, retries=2) {
       clearTimeout(timeout);
       if (!r.ok) {
         const body = await r.text();
-        throw new Error(`API ${r.status}: ${body.slice(0,200)}`);
+        let msg;
+        try { const j = JSON.parse(body); msg = j.detail || j.error || JSON.stringify(j); }
+        catch { msg = body.slice(0,300); }
+        throw Object.assign(new Error(msg), { isApiError: true, status: r.status });
       }
       return r.json();
     } catch(e) {
+      if (e.isApiError) throw e; // don't retry API errors
       if (i === retries) throw new Error('Proxy unreachable. The server may be waking up — please wait 30 seconds and try again.');
       await new Promise(r => setTimeout(r, 3000));
     }
