@@ -149,29 +149,25 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
   <div class="connect-card" id="connectCard">
     <div class="cc-left">
       <h1>Your portfolio,<br><span>intelligently</span> analyzed.</h1>
-      <p>Connect your brokerage accounts via SnapTrade and get instant insights about your portfolio — risk, diversification, health score, and personalized recommendations.</p>
+      <p>Connect your brokerage accounts and get instant insights about your portfolio — risk, diversification, health score, and personalized recommendations.</p>
       <div class="step-list">
-        <div class="step"><div class="step-num">1</div>Enter your SnapTrade User ID</div>
-        <div class="step"><div class="step-num">2</div>App fetches your live holdings securely</div>
+        <div class="step"><div class="step-num">1</div>Create an account with just a username</div>
+        <div class="step"><div class="step-num">2</div>Connect your brokerage via SnapTrade</div>
         <div class="step"><div class="step-num">3</div>Get instant portfolio analysis</div>
       </div>
     </div>
     <div class="cc-form">
-      <div class="field"><label>User ID</label><input id="userId" placeholder="your-snaptrade-user-id" autocomplete="off"/></div>
-      <div class="field" id="secretField" style="display:none;">
-        <label>User Secret <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)">(existing user)</span></label>
-        <input id="userSecret" type="password" placeholder="Your user secret UUID"/>
-      </div>
+      <div class="field"><label>Username</label><input id="username" placeholder="pick any username" autocomplete="off"/></div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div class="remember-row"><input type="checkbox" id="rememberMe"/><label for="rememberMe" style="cursor:pointer">Remember me</label></div>
         <span class="saved-badge" id="savedBadge">✓ Saved</span>
       </div>
       <div class="err" id="errBox"></div>
       <button class="connect-btn" id="connectBtn" onclick="connect()">
-        <div class="sp"></div><span>Connect & Analyze →</span>
+        <div class="sp"></div><span>Get Started →</span>
       </button>
       <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;">
-        🔒 Your data is fetched securely server-side via SnapTrade.
+        🔒 Your brokerage data is fetched securely server-side. No SnapTrade account needed.
       </div>
     </div>
   </div>
@@ -259,22 +255,18 @@ if (localStorage.getItem('snapinsight-dark') === '1') {
   });
 }
 
-// Saved credentials
 window.addEventListener('DOMContentLoaded', () => {
   if (localStorage.getItem('snapinsight-dark') === '1') {
     document.getElementById('darkBtn').textContent = '☀️';
   }
-  const saved = localStorage.getItem('snapinsight-creds');
+  const saved = localStorage.getItem('snapinsight-session');
   if (saved) {
     try {
       const d = JSON.parse(saved);
-      document.getElementById('userId').value = d.userId || '';
-      if (d.userSecret) {
-        document.getElementById('userSecret').value = d.userSecret;
-        document.getElementById('secretField').style.display = 'block';
-      }
+      document.getElementById('username').value = d.username || '';
       document.getElementById('rememberMe').checked = true;
       document.getElementById('savedBadge').style.display = 'inline';
+      C.token = d.token;
     } catch(e) {}
   }
 });
@@ -303,7 +295,7 @@ async function api(path, extra={}, retries=2) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({ path, params: extra })
+        body: JSON.stringify({ token: C.token, path, params: extra })
       });
       clearTimeout(timeout);
       if (!r.ok) {
@@ -326,43 +318,31 @@ async function connect() {
   const btn = document.getElementById('connectBtn');
   const err = document.getElementById('errBox');
   err.style.display = 'none';
-  const userId = document.getElementById('userId').value.trim();
-  const userSecret = document.getElementById('userSecret').value.trim();
-  if (!userId) { err.textContent = 'User ID is required.'; err.style.display = 'block'; return; }
+  const username = document.getElementById('username').value.trim();
+  if (!username) { err.textContent = 'Username is required.'; err.style.display = 'block'; return; }
   btn.classList.add('loading'); btn.disabled = true;
   try {
-    let secret = userSecret;
-    if (!secret) {
-      // Register or check user via backend
-      const cr = await fetch(`${PROXY}/connect`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      const cd = await cr.json();
-      if (!cr.ok) throw new Error(cd.error || 'Registration failed');
-      if (cd.exists) {
-        // User already exists, need their secret
-        document.getElementById('secretField').style.display = 'block';
-        err.textContent = 'This user ID already exists. Please enter your User Secret below.';
-        err.style.color = 'var(--accent)'; err.style.background = 'var(--adim)';
-        err.style.display = 'block';
-        btn.classList.remove('loading'); btn.disabled = false;
-        return;
-      }
-      secret = cd.userSecret;
-    }
-    C = { userId, userSecret: secret };
-    const accounts = await api('/accounts', { userId, userSecret: secret });
-    if (!accounts.length) throw new Error('No accounts found. Please connect a brokerage at app.snaptrade.com first.');
-    const acct = accounts[0];
-    C.accountId = acct.id;
+    // Sign up — server handles all SnapTrade credential management
+    const sr = await fetch(`${PROXY}/signup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    const sd = await sr.json();
+    if (!sr.ok) throw new Error(sd.error || 'Sign up failed');
+
+    C.token = sd.token;
 
     if (document.getElementById('rememberMe').checked) {
-      localStorage.setItem('snapinsight-creds', JSON.stringify({ userId, userSecret: secret }));
+      localStorage.setItem('snapinsight-session', JSON.stringify({ username, token: sd.token }));
       document.getElementById('savedBadge').style.display = 'inline';
     } else {
-      localStorage.removeItem('snapinsight-creds');
+      localStorage.removeItem('snapinsight-session');
     }
+
+    const accounts = await api('/accounts');
+    if (!accounts.length) throw new Error('No brokerage connected. Visit app.snaptrade.com to link your account first.');
+    const acct = accounts[0];
+    C.accountId = acct.id;
 
     document.getElementById('connectCard').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
@@ -370,11 +350,9 @@ async function connect() {
     document.getElementById('pbSub').textContent = `${acct.institution_name || 'Brokerage'} · ${(acct.id || '').slice(0, 8)}`;
     document.getElementById('pbAvatar').textContent = (acct.institution_name || 'P')[0];
     document.getElementById('acctType').textContent = acct.institution_name || 'Brokerage';
-    err.style.color = ''; err.style.background = '';
     await loadAll();
   } catch(e) {
-    err.style.color = ''; err.style.background = '';
-    err.textContent = e.message; err.style.display = 'block'; C = {};
+    err.textContent = e.message; err.style.display = 'block';
   }
   btn.classList.remove('loading'); btn.disabled = false;
 }
@@ -568,6 +546,7 @@ function runAI() {
 
 function disconnect() {
   C = {}; window._pd = null;
+  localStorage.removeItem('snapinsight-session');
   if (allocChartInstance) { allocChartInstance.destroy(); allocChartInstance = null; }
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('connectCard').style.display = 'grid';
