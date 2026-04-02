@@ -322,15 +322,26 @@ async function connect() {
   if (!username) { err.textContent = 'Username is required.'; err.style.display = 'block'; return; }
   btn.classList.add('loading'); btn.disabled = true;
   try {
-    // Sign up — server handles all SnapTrade credential management
-    const sr = await fetch(`${PROXY}/signup`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username })
-    });
-    const sd = await sr.json();
-    if (!sr.ok) throw new Error(sd.error || 'Sign up failed');
+    // If we already have a saved token for this username, use it directly
+    const saved = localStorage.getItem('snapinsight-session');
+    if (saved) {
+      try {
+        const d = JSON.parse(saved);
+        if (d.username === username && d.token) {
+          C.token = d.token;
+        }
+      } catch(e) {}
+    }
 
-    C.token = sd.token;
+    if (!C.token) {
+      const sr = await fetch(`${PROXY}/signup`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+      const sd = await sr.json();
+      if (!sr.ok) throw new Error(sd.error || 'Sign up failed');
+      C.token = sd.token;
+    }
 
     if (document.getElementById('rememberMe').checked) {
       localStorage.setItem('snapinsight-session', JSON.stringify({ username, token: sd.token }));
