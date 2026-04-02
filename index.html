@@ -351,7 +351,19 @@ async function connect() {
     }
 
     const accounts = await api('/accounts');
-    if (!accounts.length) throw new Error('No brokerage connected. Visit app.snaptrade.com to link your account first.');
+    if (!accounts.length) {
+      // No brokerage connected — get SnapTrade redirect URL and send user there
+      const cr = await fetch(`${PROXY}/broker-connect`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: C.token })
+      });
+      const cd = await cr.json();
+      if (cd.redirectURI) {
+        window.location.href = cd.redirectURI;
+        return;
+      }
+      throw new Error('No brokerage connected. Please try again.');
+    }
     const acct = accounts[0];
     C.accountId = acct.id;
 
