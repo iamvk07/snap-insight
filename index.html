@@ -151,18 +151,19 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
       <h1>Your portfolio,<br><span>intelligently</span> analyzed.</h1>
       <p>Connect your brokerage accounts via SnapTrade and get instant insights about your portfolio — risk, diversification, health score, and personalized recommendations.</p>
       <div class="step-list">
-        <div class="step"><div class="step-num">1</div>Enter your SnapTrade credentials</div>
+        <div class="step"><div class="step-num">1</div>Enter your SnapTrade User ID</div>
         <div class="step"><div class="step-num">2</div>App fetches your live holdings securely</div>
         <div class="step"><div class="step-num">3</div>Get instant portfolio analysis</div>
       </div>
     </div>
     <div class="cc-form">
-      <div class="field"><label>Client ID</label><input id="clientId" placeholder="PERS-XXXXXXXXXXXX" autocomplete="off"/></div>
-      <div class="field"><label>Consumer Key</label><input id="consumerKey" type="password" placeholder="Your consumer key"/></div>
-      <div class="field"><label>User ID</label><input id="userId" placeholder="your-user-id" autocomplete="off"/></div>
-      <div class="field"><label>User Secret</label><input id="userSecret" type="password" placeholder="User secret UUID"/></div>
+      <div class="field"><label>User ID</label><input id="userId" placeholder="your-snaptrade-user-id" autocomplete="off"/></div>
+      <div class="field" id="secretField" style="display:none;">
+        <label>User Secret <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)">(existing user)</span></label>
+        <input id="userSecret" type="password" placeholder="Your user secret UUID"/>
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div class="remember-row"><input type="checkbox" id="rememberMe"/><label for="rememberMe" style="cursor:pointer">Remember credentials</label></div>
+        <div class="remember-row"><input type="checkbox" id="rememberMe"/><label for="rememberMe" style="cursor:pointer">Remember me</label></div>
         <span class="saved-badge" id="savedBadge">✓ Saved</span>
       </div>
       <div class="err" id="errBox"></div>
@@ -170,7 +171,7 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
         <div class="sp"></div><span>Connect & Analyze →</span>
       </button>
       <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;">
-        🔒 Credentials stay in your browser. Never sent anywhere except SnapTrade.
+        🔒 Your data is fetched securely server-side via SnapTrade.
       </div>
     </div>
   </div>
@@ -267,10 +268,11 @@ window.addEventListener('DOMContentLoaded', () => {
   if (saved) {
     try {
       const d = JSON.parse(saved);
-      document.getElementById('clientId').value = d.clientId || '';
-      document.getElementById('consumerKey').value = d.consumerKey || '';
       document.getElementById('userId').value = d.userId || '';
-      document.getElementById('userSecret').value = d.userSecret || '';
+      if (d.userSecret) {
+        document.getElementById('userSecret').value = d.userSecret;
+        document.getElementById('secretField').style.display = 'block';
+      }
       document.getElementById('rememberMe').checked = true;
       document.getElementById('savedBadge').style.display = 'inline';
     } catch(e) {}
@@ -301,7 +303,7 @@ async function api(path, extra={}, retries=2) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({ clientId: C.clientId, consumerKey: C.consumerKey, path, params: extra })
+        body: JSON.stringify({ path, params: extra })
       });
       clearTimeout(timeout);
       if (!r.ok) {
@@ -324,24 +326,39 @@ async function connect() {
   const btn = document.getElementById('connectBtn');
   const err = document.getElementById('errBox');
   err.style.display = 'none';
-  C = {
-    clientId: document.getElementById('clientId').value.trim(),
-    consumerKey: document.getElementById('consumerKey').value.trim(),
-    userId: document.getElementById('userId').value.trim(),
-    userSecret: document.getElementById('userSecret').value.trim(),
-  };
-  if (!C.clientId || !C.consumerKey || !C.userId || !C.userSecret) {
-    err.textContent = 'All fields required.'; err.style.display = 'block'; return;
-  }
+  const userId = document.getElementById('userId').value.trim();
+  const userSecret = document.getElementById('userSecret').value.trim();
+  if (!userId) { err.textContent = 'User ID is required.'; err.style.display = 'block'; return; }
   btn.classList.add('loading'); btn.disabled = true;
   try {
-    const accounts = await api('/accounts', { userId: C.userId, userSecret: C.userSecret });
-    if (!accounts.length) throw new Error('No accounts found. Please connect a brokerage first at snaptrade.com');
+    let secret = userSecret;
+    if (!secret) {
+      // Register or check user via backend
+      const cr = await fetch(`${PROXY}/connect`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      const cd = await cr.json();
+      if (!cr.ok) throw new Error(cd.error || 'Registration failed');
+      if (cd.exists) {
+        // User already exists, need their secret
+        document.getElementById('secretField').style.display = 'block';
+        err.textContent = 'This user ID already exists. Please enter your User Secret below.';
+        err.style.color = 'var(--accent)'; err.style.background = 'var(--adim)';
+        err.style.display = 'block';
+        btn.classList.remove('loading'); btn.disabled = false;
+        return;
+      }
+      secret = cd.userSecret;
+    }
+    C = { userId, userSecret: secret };
+    const accounts = await api('/accounts', { userId, userSecret: secret });
+    if (!accounts.length) throw new Error('No accounts found. Please connect a brokerage at app.snaptrade.com first.');
     const acct = accounts[0];
     C.accountId = acct.id;
 
     if (document.getElementById('rememberMe').checked) {
-      localStorage.setItem('snapinsight-creds', JSON.stringify(C));
+      localStorage.setItem('snapinsight-creds', JSON.stringify({ userId, userSecret: secret }));
       document.getElementById('savedBadge').style.display = 'inline';
     } else {
       localStorage.removeItem('snapinsight-creds');
@@ -353,8 +370,10 @@ async function connect() {
     document.getElementById('pbSub').textContent = `${acct.institution_name || 'Brokerage'} · ${(acct.id || '').slice(0, 8)}`;
     document.getElementById('pbAvatar').textContent = (acct.institution_name || 'P')[0];
     document.getElementById('acctType').textContent = acct.institution_name || 'Brokerage';
+    err.style.color = ''; err.style.background = '';
     await loadAll();
   } catch(e) {
+    err.style.color = ''; err.style.background = '';
     err.textContent = e.message; err.style.display = 'block'; C = {};
   }
   btn.classList.remove('loading'); btn.disabled = false;
