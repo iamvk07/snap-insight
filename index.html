@@ -151,13 +151,14 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
       <h1>Your portfolio,<br><span>intelligently</span> analyzed.</h1>
       <p>Connect your brokerage accounts and get instant insights about your portfolio — risk, diversification, health score, and personalized recommendations.</p>
       <div class="step-list">
-        <div class="step"><div class="step-num">1</div>Create an account with just a username</div>
+        <div class="step"><div class="step-num">1</div>Create an account with a username and password</div>
         <div class="step"><div class="step-num">2</div>Connect your brokerage via SnapTrade</div>
         <div class="step"><div class="step-num">3</div>Get instant portfolio analysis</div>
       </div>
     </div>
     <div class="cc-form">
       <div class="field"><label>Username</label><input id="username" placeholder="pick any username" autocomplete="off"/></div>
+      <div class="field"><label>Password</label><input id="password" type="password" placeholder="choose a password" autocomplete="current-password"/></div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div class="remember-row"><input type="checkbox" id="rememberMe"/><label for="rememberMe" style="cursor:pointer">Remember me</label></div>
         <span class="saved-badge" id="savedBadge">✓ Saved</span>
@@ -319,29 +320,19 @@ async function connect() {
   const err = document.getElementById('errBox');
   err.style.display = 'none';
   const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
   if (!username) { err.textContent = 'Username is required.'; err.style.display = 'block'; return; }
+  if (!password) { err.textContent = 'Password is required.'; err.style.display = 'block'; return; }
   btn.classList.add('loading'); btn.disabled = true;
+  let sd;
   try {
-    // If we already have a saved token for this username, use it directly
-    const saved = localStorage.getItem('snapinsight-session');
-    if (saved) {
-      try {
-        const d = JSON.parse(saved);
-        if (d.username === username && d.token) {
-          C.token = d.token;
-        }
-      } catch(e) {}
-    }
-
-    if (!C.token) {
-      const sr = await fetch(`${PROXY}/signup`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
-      });
-      const sd = await sr.json();
-      if (!sr.ok) throw new Error(sd.error || 'Sign up failed');
-      C.token = sd.token;
-    }
+    const sr = await fetch(`${PROXY}/signup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    sd = await sr.json();
+    if (!sr.ok) throw new Error(sd.error || 'Sign up failed');
+    C.token = sd.token;
 
     if (document.getElementById('rememberMe').checked) {
       localStorage.setItem('snapinsight-session', JSON.stringify({ username, token: sd.token }));
