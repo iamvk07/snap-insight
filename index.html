@@ -133,7 +133,7 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
 .up{color:var(--green);}.down{color:var(--red);}
 .skel{background:linear-gradient(90deg,var(--border) 25%,var(--bg) 50%,var(--border) 75%);background-size:200% 100%;animation:skel 1.4s infinite;border-radius:6px;}
 @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
-@media(max-width:800px){header{padding:16px 20px;}.main{padding:20px 16px;}.connect-card{grid-template-columns:1fr;}.stats-row{grid-template-columns:1fr 1fr;}.grid3{grid-template-columns:1fr;}}
+@media(max-width:800px){header{padding:16px 20px;}.main{padding:20px 16px;}.connect-card{grid-template-columns:1fr;}.stats-row{grid-template-columns:1fr 1fr;}.grid3{grid-template-columns:1fr;}.grid2{grid-template-columns:1fr!important;}}
 </style>
 </head>
 <body>
@@ -184,8 +184,8 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
     <div class="stats-row">
       <div class="stat-card"><div class="sc-label">Total Value</div><div class="sc-val" id="totalVal">—</div><div class="sc-sub">All positions + cash</div></div>
       <div class="stat-card"><div class="sc-label">Cash Balance</div><div class="sc-val" id="cashVal">—</div><div class="sc-sub">Available to invest</div></div>
-      <div class="stat-card"><div class="sc-label">Positions</div><div class="sc-val" id="posCount">—</div><div class="sc-sub">Active holdings</div></div>
-      <div class="stat-card"><div class="sc-label">Brokerage</div><div class="sc-val" id="acctType" style="font-size:16px;">—</div><div class="sc-sub" id="acctSub">Connected</div></div>
+      <div class="stat-card"><div class="sc-label">Day's P&amp;L</div><div class="sc-val" id="dayPnl">—</div><div class="sc-sub" id="dayPnlPct">Open positions</div></div>
+      <div class="stat-card"><div class="sc-label">Total Return</div><div class="sc-val" id="totalReturn">—</div><div class="sc-sub" id="totalReturnPct">vs. cost basis</div></div>
     </div>
     <div class="ai-card">
       <div class="ai-head"><span style="font-size:16px">✦</span><span class="ai-title">Portfolio Analysis</span><span class="ai-badge">Auto Insights</span></div>
@@ -195,11 +195,25 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
         <div class="ai-metrics" id="aiMetrics" style="display:none;"></div>
       </div>
     </div>
+    <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="panel">
+        <div class="ph"><span class="ph-title">Top Gainers</span></div>
+        <div class="pb2" id="gainersBody"><div style="font-size:13px;color:var(--muted)">No positions yet</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><span class="ph-title">Top Losers</span></div>
+        <div class="pb2" id="losersBody"><div style="font-size:13px;color:var(--muted)">No positions yet</div></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="ph"><span class="ph-title">Portfolio Heatmap</span><span style="font-size:11px;color:var(--muted);margin-left:8px;">sized by value · colored by return</span></div>
+      <div class="pb2"><div id="treemap" style="display:flex;flex-wrap:wrap;gap:6px;min-height:80px;"></div></div>
+    </div>
     <div class="panel" style="margin-bottom:16px;">
       <div class="ph"><span class="ph-title">Holdings</span><span class="ph-badge" id="holdBadge">0 positions</span></div>
       <div class="pb2">
         <table class="htable">
-          <thead><tr><th>Symbol</th><th>Type</th><th>Qty</th><th>Price</th><th>Market Value</th><th>Allocation</th></tr></thead>
+          <thead><tr><th>Symbol</th><th>Type</th><th>Qty</th><th>Avg Cost</th><th>Price</th><th>Market Value</th><th>Return</th><th>Allocation</th></tr></thead>
           <tbody id="holdingsBody"></tbody>
         </table>
       </div>
@@ -449,11 +463,24 @@ function renderHoldings(data) {
   const totalMV = pos.reduce((s, p) => s + (p.price * (p.units + (p.fractional_units || 0)) || 0), 0);
   const grand = totalMV + cash;
 
+  // Day P&L and total return
+  const totalPnl = pos.reduce((s, p) => s + (p.open_pnl || 0), 0);
+  const totalInvested = pos.reduce((s, p) => s + ((p.average_purchase_price || 0) * ((p.units || 0) + (p.fractional_units || 0))), 0);
+  const totalReturnAmt = totalMV - totalInvested;
+  const totalReturnPct = totalInvested > 0 ? (totalReturnAmt / totalInvested * 100) : 0;
+
   animateCounter(document.getElementById('totalVal'), grand, '$');
   animateCounter(document.getElementById('cashVal'), cash, '$');
-  const posEl = document.getElementById('posCount');
-  posEl.textContent = '0';
-  setTimeout(() => posEl.textContent = pos.length, 400);
+
+  const pnlEl = document.getElementById('dayPnl');
+  pnlEl.textContent = (totalPnl >= 0 ? '+$' : '-$') + fmt(Math.abs(totalPnl));
+  pnlEl.style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('dayPnlPct').textContent = pos.length ? 'Unrealized P&L' : 'No positions';
+
+  const retEl = document.getElementById('totalReturn');
+  retEl.textContent = (totalReturnAmt >= 0 ? '+$' : '-$') + fmt(Math.abs(totalReturnAmt));
+  retEl.style.color = totalReturnAmt >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('totalReturnPct').textContent = totalInvested > 0 ? (totalReturnPct >= 0 ? '+' : '') + totalReturnPct.toFixed(2) + '% vs cost basis' : 'vs. cost basis';
 
   document.getElementById('holdBadge').textContent = pos.length + ' positions';
 
@@ -467,14 +494,19 @@ function renderHoldings(data) {
       const t = getType(p);
       const pctColor = pct > 30 ? 'var(--red)' : pct > 15 ? 'var(--accent)' : 'var(--green)';
       const totalUnits = (p.units || 0) + (p.fractional_units || 0);
-      const pnl = p.open_pnl;
-      const pnlStr = pnl != null ? `<span style="color:${pnl >= 0 ? 'var(--green)' : 'var(--red)'};">${pnl >= 0 ? '+' : ''}$${fmt(pnl)}</span>` : '—';
+      const avgCost = p.average_purchase_price || 0;
+      const retAmt = avgCost > 0 ? (p.price - avgCost) * totalUnits : null;
+      const retPct = avgCost > 0 ? ((p.price - avgCost) / avgCost * 100) : null;
+      const retColor = retPct == null ? 'var(--muted)' : retPct >= 0 ? 'var(--green)' : 'var(--red)';
+      const retStr = retPct != null ? `<span style="color:${retColor};font-family:var(--mono);font-size:12px;">${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%</span><br><span style="font-size:10px;color:${retColor};">${retAmt >= 0 ? '+' : ''}$${fmt(retAmt)}</span>` : '—';
       return `<tr>
         <td><div class="sym">${p.symbol?.symbol || '—'}</div><div class="sym-name">${(p.symbol?.name || p.symbol?.description || '').slice(0, 28)}</div></td>
         <td><span class="type-badge type-${t}">${t.toUpperCase()}</span></td>
         <td>${fmt(totalUnits, 4)}</td>
+        <td>${avgCost > 0 ? '$' + fmt(avgCost) : '—'}</td>
         <td>$${fmt(p.price)}</td>
-        <td>$${fmt(mv)}<br><span style="font-size:10px;color:var(--muted);">P&L: ${pnlStr}</span></td>
+        <td>$${fmt(mv)}</td>
+        <td>${retStr}</td>
         <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${pct}%;background:${pctColor}"></div></div><span style="font-family:var(--mono);font-size:11px;color:${pctColor};min-width:40px">${pct.toFixed(1)}%</span></div></td>
       </tr>`;
     }).join('');
@@ -519,6 +551,51 @@ function renderHoldings(data) {
     { l: 'Cash Ratio', v: cashScore, max: 30, c: '#00a86b' },
     { l: 'Asset Variety', v: typeScore, max: 30, c: '#7e22ce' },
   ].map(s => `<div class="sb-item"><div class="sb-lbl">${s.l}</div><div class="sb-bar"><div class="sb-fill" style="width:${s.v / s.max * 100}%;background:${s.c}"></div></div><div class="sb-val">${s.v}</div></div>`).join('');
+
+  // Treemap
+  const treemap = document.getElementById('treemap');
+  if (!pos.length) {
+    treemap.innerHTML = '<span style="font-size:13px;color:var(--muted)">No positions yet</span>';
+  } else {
+    const totalForMap = pos.reduce((s, p) => s + (p.price * ((p.units||0)+(p.fractional_units||0))||0), 0) || 1;
+    treemap.innerHTML = pos.map(p => {
+      const mv2 = p.price * ((p.units||0)+(p.fractional_units||0));
+      const w = Math.max(8, (mv2 / totalForMap) * 100);
+      const ret = p.average_purchase_price > 0 ? ((p.price - p.average_purchase_price) / p.average_purchase_price * 100) : 0;
+      const bg = ret > 5 ? '#00a86b' : ret > 0 ? '#34d399' : ret > -5 ? '#f87171' : '#e53e3e';
+      const retStr = p.average_purchase_price > 0 ? (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%' : '';
+      return `<div style="flex:${w} 0 ${w}%;min-width:60px;background:${bg};border-radius:8px;padding:10px 8px;display:flex;flex-direction:column;justify-content:center;cursor:default;transition:opacity .15s;" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+        <div style="font-weight:800;font-size:13px;color:#fff;">${p.symbol?.symbol || '?'}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.8);">$${fmt(mv2)}</div>
+        ${retStr ? `<div style="font-size:11px;color:#fff;font-weight:700;">${retStr}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // Winners & Losers
+  function renderGainLoss(elId, sorted) {
+    const el = document.getElementById(elId);
+    if (!sorted.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted)">No positions</div>'; return; }
+    el.innerHTML = sorted.slice(0, 3).map(p => {
+      const retPct = p.average_purchase_price > 0 ? ((p.price - p.average_purchase_price) / p.average_purchase_price * 100) : null;
+      const pnl = p.open_pnl || 0;
+      const col = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div><div style="font-weight:700;font-size:13px;">${p.symbol?.symbol || '—'}</div><div style="font-size:11px;color:var(--muted);">$${fmt(p.price)} · ${fmt((p.units||0)+(p.fractional_units||0),4)} units</div></div>
+        <div style="text-align:right;"><div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${col};">${retPct != null ? (retPct >= 0 ? '+' : '') + retPct.toFixed(2) + '%' : '—'}</div><div style="font-size:11px;color:${col};">${pnl >= 0 ? '+' : ''}$${fmt(pnl)}</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  if (pos.length) {
+    const withReturn = pos.filter(p => p.average_purchase_price > 0);
+    const byReturn = [...withReturn].sort((a, b) => ((b.price - b.average_purchase_price) / b.average_purchase_price) - ((a.price - a.average_purchase_price) / a.average_purchase_price));
+    renderGainLoss('gainersBody', byReturn);
+    renderGainLoss('losersBody', [...byReturn].reverse());
+  } else {
+    document.getElementById('gainersBody').innerHTML = '<div style="font-size:13px;color:var(--muted)">No positions yet</div>';
+    document.getElementById('losersBody').innerHTML = '<div style="font-size:13px;color:var(--muted)">No positions yet</div>';
+  }
 
   window._pd = { pos, cash, grand, byType };
 }
