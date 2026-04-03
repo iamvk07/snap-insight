@@ -372,8 +372,8 @@ async function loadAll() {
   document.getElementById('holdingsBody').innerHTML = `<tr><td colspan="6"><div class="skel" style="height:14px;margin:10px 0;"></div><div class="skel" style="height:14px;margin:10px 0;width:80%;"></div></td></tr>`;
   try {
     const [holdings, txs] = await Promise.all([
-      api(`/accounts/${C.accountId}/holdings`, { userId: C.userId, userSecret: C.userSecret }),
-      api(`/accounts/${C.accountId}/activities`, { userId: C.userId, userSecret: C.userSecret, limit: '8' }).catch(() => [])
+      api(`/accounts/${C.accountId}/holdings`),
+      api(`/accounts/${C.accountId}/activities`, { limit: '8' }).catch(() => [])
     ]);
     renderHoldings(holdings);
     renderTx(Array.isArray(txs) ? txs : []);
@@ -418,8 +418,8 @@ function rebuildChart() {
 
 function renderHoldings(data) {
   const pos = data.positions || [];
-  const bal = data.account?.balances || [];
-  const cash = bal.reduce((s, b) => s + (b.cash || 0), 0);
+  const bal = data.balances || [];
+  const cash = bal.reduce((s, b) => s + (b.cash || b.buying_power || 0), 0);
   const totalMV = pos.reduce((s, p) => s + (p.price * p.units || 0), 0);
   const grand = totalMV + cash;
 
@@ -433,7 +433,7 @@ function renderHoldings(data) {
 
   const tbody = document.getElementById('holdingsBody');
   if (!pos.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);padding:20px;text-align:center">No positions — add some trades in your brokerage account</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:20px;text-align:center">No positions yet${cash > 0 ? ` — $${fmt(cash)} available to invest` : ' — add some trades in your brokerage account'}</td></tr>`;
   } else {
     tbody.innerHTML = pos.map(p => {
       const mv = (p.price || 0) * (p.units || 0);
@@ -515,7 +515,11 @@ function runAI() {
   const insights = [];
 
   if (!pos.length) {
-    insights.push('<strong>No positions found.</strong> Your account is connected but has no holdings yet. Add trades in your brokerage account to see analysis.');
+    if (cash > 0) {
+      insights.push(`<strong>Account connected.</strong> You have $${fmt(cash)} in cash ready to invest. No positions yet — place your first trade to unlock full portfolio analysis.`);
+    } else {
+      insights.push('<strong>No positions found.</strong> Your account is connected but has no holdings yet. Add trades in your brokerage account to see analysis.');
+    }
   } else {
     const sorted = [...pos].sort((a, b) => (b.price * b.units) - (a.price * a.units));
     const top = sorted[0];
