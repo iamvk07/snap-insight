@@ -398,7 +398,7 @@ async function loadAll() {
   try {
     const [holdings, txs] = await Promise.all([
       api(`/accounts/${C.accountId}/holdings`),
-      api(`/accounts/${C.accountId}/recentOrders`).catch(() => [])
+      api(`/accounts/${C.accountId}/orders`).catch(() => [])
     ]);
     renderHoldings(holdings);
     renderTx(Array.isArray(txs) ? txs : []);
@@ -446,7 +446,7 @@ function renderHoldings(data) {
   const pos = data.positions || [];
   const bal = data.balances || [];
   const cash = bal.reduce((s, b) => s + (b.cash ?? b.buying_power ?? 0), 0);
-  const totalMV = pos.reduce((s, p) => s + (p.market_value ?? (p.price * p.units) ?? 0), 0);
+  const totalMV = pos.reduce((s, p) => s + (p.price * (p.units + (p.fractional_units || 0)) || 0), 0);
   const grand = totalMV + cash;
 
   animateCounter(document.getElementById('totalVal'), grand, '$');
@@ -462,16 +462,19 @@ function renderHoldings(data) {
     tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:20px;text-align:center">No positions yet${cash > 0 ? ` — $${fmt(cash)} available to invest` : ' — add some trades in your brokerage account'}</td></tr>`;
   } else {
     tbody.innerHTML = pos.map(p => {
-      const mv = p.market_value ?? ((p.price || 0) * (p.units || 0));
+      const mv = (p.price || 0) * ((p.units || 0) + (p.fractional_units || 0));
       const pct = grand > 0 ? mv / grand * 100 : 0;
       const t = getType(p);
       const pctColor = pct > 30 ? 'var(--red)' : pct > 15 ? 'var(--accent)' : 'var(--green)';
+      const totalUnits = (p.units || 0) + (p.fractional_units || 0);
+      const pnl = p.open_pnl;
+      const pnlStr = pnl != null ? `<span style="color:${pnl >= 0 ? 'var(--green)' : 'var(--red)'};">${pnl >= 0 ? '+' : ''}$${fmt(pnl)}</span>` : '—';
       return `<tr>
-        <td><div class="sym">${p.symbol?.symbol || '—'}</div><div class="sym-name">${(p.symbol?.description || '').slice(0, 28)}</div></td>
+        <td><div class="sym">${p.symbol?.symbol || '—'}</div><div class="sym-name">${(p.symbol?.name || p.symbol?.description || '').slice(0, 28)}</div></td>
         <td><span class="type-badge type-${t}">${t.toUpperCase()}</span></td>
-        <td>${fmt(p.units, 4)}</td>
+        <td>${fmt(totalUnits, 4)}</td>
         <td>$${fmt(p.price)}</td>
-        <td>$${fmt(mv)}</td>
+        <td>$${fmt(mv)}<br><span style="font-size:10px;color:var(--muted);">P&L: ${pnlStr}</span></td>
         <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${pct}%;background:${pctColor}"></div></div><span style="font-family:var(--mono);font-size:11px;color:${pctColor};min-width:40px">${pct.toFixed(1)}%</span></div></td>
       </tr>`;
     }).join('');
@@ -479,7 +482,7 @@ function renderHoldings(data) {
 
   // Donut chart
   const byType = {};
-  pos.forEach(p => { const t = getType(p); byType[t] = (byType[t] || 0) + (p.market_value ?? (p.price * p.units) ?? 0); });
+  pos.forEach(p => { const t = getType(p); byType[t] = (byType[t] || 0) + (p.price * ((p.units || 0) + (p.fractional_units || 0)) || 0); });
   if (cash > 0) byType['cash'] = cash;
 
   const sorted = Object.entries(byType).sort((a, b) => b[1] - a[1]);
@@ -522,17 +525,17 @@ function renderHoldings(data) {
 
 function renderTx(txs) {
   const el = document.getElementById('txBody');
-  const list = Array.isArray(txs) ? txs : (txs?.orders || []);
+  const list = Array.isArray(txs) ? txs : [];
   if (!list.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted)">No recent transactions</div>'; return; }
   el.innerHTML = list.slice(0, 6).map(tx => {
-    const side = (tx.action || tx.side || '').toLowerCase();
-    const t = side.includes('buy') ? 'buy' : side.includes('sell') ? 'sell' : 'div';
+    const action = (tx.action || '').toLowerCase();
+    const t = action.includes('buy') ? 'buy' : action.includes('sell') ? 'sell' : 'div';
     const icon = t === 'buy' ? '↑' : t === 'sell' ? '↓' : '＄';
-    const qty = tx.units || tx.quantity || 0;
-    const price = tx.price || tx.limit_price || tx.stop_price || 0;
+    const qty = tx.filled_quantity || tx.total_quantity || 0;
+    const price = tx.execution_price || tx.limit_price || tx.stop_price || 0;
     const val = qty && price ? qty * price : 0;
-    const sym = tx.symbol?.symbol || tx.symbol || tx.universal_symbol?.symbol || 'Order';
-    const date = tx.settled_date || tx.created_time || tx.placement_time || '';
+    const sym = tx.universal_symbol?.symbol || tx.symbol?.symbol || 'Order';
+    const date = tx.time_placed || '';
     return `<div class="tx-item">
       <div class="tx-icon ${t}">${icon}</div>
       <div class="tx-info"><div class="tx-sym">${sym}</div><div class="tx-date">${date ? new Date(date).toLocaleDateString() : '—'}</div></div>
@@ -553,10 +556,10 @@ function runAI() {
       insights.push('<strong>No positions found.</strong> Your account is connected but has no holdings yet. Add trades in your brokerage account to see analysis.');
     }
   } else {
-    const sorted = [...pos].sort((a, b) => (b.market_value ?? b.price * b.units) - (a.market_value ?? a.price * a.units));
+    const mv = p => p.price * ((p.units || 0) + (p.fractional_units || 0));
+    const sorted = [...pos].sort((a, b) => mv(b) - mv(a));
     const top = sorted[0];
-    const topMV = top.market_value ?? (top.price * top.units);
-    const topPct = grand > 0 ? topMV / grand * 100 : 0;
+    const topPct = grand > 0 ? mv(top) / grand * 100 : 0;
     if (topPct > 40) {
       insights.push(`<strong>High concentration risk:</strong> ${top.symbol?.symbol} makes up ${topPct.toFixed(1)}% of your portfolio. Consider trimming to reduce single-stock exposure.`);
     } else if (topPct > 25) {
