@@ -409,10 +409,11 @@ async function loadAll() {
 }
 
 function getType(p) {
-  const d = (p.symbol?.security_type?.description || '').toLowerCase();
-  if (/crypto/.test(d)) return 'crypto';
-  if (/etf/.test(d)) return 'etf';
-  if (/stock|equity|common/.test(d)) return 'stock';
+  const d = (p.symbol?.security_type?.description || p.symbol?.security_type || '').toLowerCase();
+  const sym = (p.symbol?.symbol || '').toUpperCase();
+  if (/crypto|digital|coin/.test(d) || ['BTC','ETH','SOL','DOGE','XRP','ADA','AVAX','MATIC','DOT','LINK'].includes(sym)) return 'crypto';
+  if (/etf|fund|trust/.test(d)) return 'etf';
+  if (/stock|equity|common|share/.test(d)) return 'stock';
   return 'other';
 }
 
@@ -445,7 +446,7 @@ function renderHoldings(data) {
   const pos = data.positions || [];
   const bal = data.balances || [];
   const cash = bal.reduce((s, b) => s + (b.cash ?? b.buying_power ?? 0), 0);
-  const totalMV = pos.reduce((s, p) => s + (p.price * p.units || 0), 0);
+  const totalMV = pos.reduce((s, p) => s + (p.market_value ?? (p.price * p.units) ?? 0), 0);
   const grand = totalMV + cash;
 
   animateCounter(document.getElementById('totalVal'), grand, '$');
@@ -461,7 +462,7 @@ function renderHoldings(data) {
     tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted);padding:20px;text-align:center">No positions yet${cash > 0 ? ` — $${fmt(cash)} available to invest` : ' — add some trades in your brokerage account'}</td></tr>`;
   } else {
     tbody.innerHTML = pos.map(p => {
-      const mv = (p.price || 0) * (p.units || 0);
+      const mv = p.market_value ?? ((p.price || 0) * (p.units || 0));
       const pct = grand > 0 ? mv / grand * 100 : 0;
       const t = getType(p);
       const pctColor = pct > 30 ? 'var(--red)' : pct > 15 ? 'var(--accent)' : 'var(--green)';
@@ -478,7 +479,7 @@ function renderHoldings(data) {
 
   // Donut chart
   const byType = {};
-  pos.forEach(p => { const t = getType(p); byType[t] = (byType[t] || 0) + (p.price * p.units || 0); });
+  pos.forEach(p => { const t = getType(p); byType[t] = (byType[t] || 0) + (p.market_value ?? (p.price * p.units) ?? 0); });
   if (cash > 0) byType['cash'] = cash;
 
   const sorted = Object.entries(byType).sort((a, b) => b[1] - a[1]);
@@ -552,15 +553,16 @@ function runAI() {
       insights.push('<strong>No positions found.</strong> Your account is connected but has no holdings yet. Add trades in your brokerage account to see analysis.');
     }
   } else {
-    const sorted = [...pos].sort((a, b) => (b.price * b.units) - (a.price * a.units));
+    const sorted = [...pos].sort((a, b) => (b.market_value ?? b.price * b.units) - (a.market_value ?? a.price * a.units));
     const top = sorted[0];
-    const topPct = grand > 0 ? (top.price * top.units) / grand * 100 : 0;
+    const topMV = top.market_value ?? (top.price * top.units);
+    const topPct = grand > 0 ? topMV / grand * 100 : 0;
     if (topPct > 40) {
       insights.push(`<strong>High concentration risk:</strong> ${top.symbol?.symbol} makes up ${topPct.toFixed(1)}% of your portfolio. Consider trimming to reduce single-stock exposure.`);
     } else if (topPct > 25) {
       insights.push(`<strong>Moderate concentration:</strong> ${top.symbol?.symbol} is your largest position at ${topPct.toFixed(1)}%. Worth monitoring as it grows.`);
     } else {
-      insights.push(`<strong>Well distributed:</strong> Your largest position (${top.symbol?.symbol}) is only ${topPct.toFixed(1)}% of the portfolio — good concentration control.`);
+      insights.push(`<strong>Well distributed:</strong> Your largest position (${top.symbol?.symbol}) is only ${topPct.toFixed(1)}% of your portfolio — good concentration control.`);
     }
     const cashPct = grand > 0 ? cash / grand * 100 : 0;
     if (cashPct > 50) {
