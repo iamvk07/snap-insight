@@ -375,7 +375,7 @@ async function connect() {
         window.location.href = cd.redirectURI;
         return;
       }
-      throw new Error('No brokerage connected. Please try again.');
+      throw new Error(cd.error || 'Failed to get brokerage connection URL.');
     }
     const acct = accounts[0];
     C.accountId = acct.id;
