@@ -151,13 +151,13 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
       <h1>Your portfolio,<br><span>intelligently</span> analyzed.</h1>
       <p>Connect your brokerage accounts and get instant insights about your portfolio — risk, diversification, health score, and personalized recommendations.</p>
       <div class="step-list">
-        <div class="step"><div class="step-num">1</div>Enter your SnapTrade User ID</div>
+        <div class="step"><div class="step-num">1</div>Choose a User ID to create your account</div>
         <div class="step"><div class="step-num">2</div>Connect your brokerage via SnapTrade</div>
         <div class="step"><div class="step-num">3</div>Get instant portfolio analysis</div>
       </div>
     </div>
     <div class="cc-form">
-      <div class="field"><label>SnapTrade User ID</label><input id="username" placeholder="your SnapTrade user ID" autocomplete="off"/></div>
+      <div class="field"><label>User ID</label><input id="username" placeholder="choose a user ID (e.g. terry123)" autocomplete="off"/></div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div class="remember-row"><input type="checkbox" id="rememberMe"/><label for="rememberMe" style="cursor:pointer">Remember me</label></div>
         <span class="saved-badge" id="savedBadge">✓ Saved</span>
@@ -167,7 +167,7 @@ body.dark .ai-card{background:#1a1a2e;border:1px solid #2a2a4a;}
         <div class="sp"></div><span>Get Started →</span>
       </button>
       <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;">
-        🔒 Enter the User ID from your SnapTrade account. Your credentials stay secure.
+        🔒 New users are registered automatically. Your data stays secure server-side.
       </div>
     </div>
   </div>
@@ -319,7 +319,7 @@ async function connect() {
   const err = document.getElementById('errBox');
   err.style.display = 'none';
   const username = document.getElementById('username').value.trim();
-  if (!username) { err.textContent = 'Please enter your SnapTrade User ID.'; err.style.display = 'block'; return; }
+  if (!username) { err.textContent = 'Please enter a User ID.'; err.style.display = 'block'; return; }
   btn.classList.add('loading'); btn.disabled = true;
   let sd;
   try {
