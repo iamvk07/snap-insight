@@ -255,7 +255,7 @@ if (localStorage.getItem('snapinsight-dark') === '1') {
   });
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   if (localStorage.getItem('snapinsight-dark') === '1') {
     document.getElementById('darkBtn').textContent = '☀️';
   }
@@ -263,13 +263,38 @@ window.addEventListener('DOMContentLoaded', () => {
   if (saved) {
     try {
       const d = JSON.parse(saved);
-      document.getElementById('username').value = d.username || '';
-      document.getElementById('rememberMe').checked = true;
-      document.getElementById('savedBadge').style.display = 'inline';
-      C.token = d.token;
+      if (d.token && d.username) {
+        document.getElementById('username').value = d.username || '';
+        document.getElementById('rememberMe').checked = true;
+        document.getElementById('savedBadge').style.display = 'inline';
+        C.token = d.token;
+        // Auto-login with saved token
+        await autoLogin(d.username, d.token);
+      }
     } catch(e) {}
   }
 });
+
+async function autoLogin(username, token) {
+  C.token = token;
+  try {
+    const accounts = await api('/accounts');
+    if (!accounts.length) return; // No brokerage, let user go through connect flow
+    const acct = accounts[0];
+    C.accountId = acct.id;
+    document.getElementById('connectCard').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('pbName').textContent = acct.name || 'My Portfolio';
+    document.getElementById('pbSub').textContent = `${acct.institution_name || 'Brokerage'} · ${(acct.id || '').slice(0, 8)}`;
+    document.getElementById('pbAvatar').textContent = (acct.institution_name || 'P')[0];
+    document.getElementById('acctType').textContent = acct.institution_name || 'Brokerage';
+    await loadAll();
+  } catch(e) {
+    // Token expired or invalid — clear and show login
+    localStorage.removeItem('snapinsight-session');
+    C = {};
+  }
+}
 
 // Animated counter
 function animateCounter(el, target, prefix='$', decimals=2) {
@@ -373,7 +398,7 @@ async function loadAll() {
   try {
     const [holdings, txs] = await Promise.all([
       api(`/accounts/${C.accountId}/holdings`),
-      api(`/accounts/${C.accountId}/activities`, { limit: '8' }).catch(() => [])
+      api(`/accounts/${C.accountId}/recentOrders`).catch(() => [])
     ]);
     renderHoldings(holdings);
     renderTx(Array.isArray(txs) ? txs : []);
@@ -419,7 +444,7 @@ function rebuildChart() {
 function renderHoldings(data) {
   const pos = data.positions || [];
   const bal = data.balances || [];
-  const cash = bal.reduce((s, b) => s + (b.cash || b.buying_power || 0), 0);
+  const cash = bal.reduce((s, b) => s + (b.cash ?? b.buying_power ?? 0), 0);
   const totalMV = pos.reduce((s, p) => s + (p.price * p.units || 0), 0);
   const grand = totalMV + cash;
 
@@ -496,15 +521,21 @@ function renderHoldings(data) {
 
 function renderTx(txs) {
   const el = document.getElementById('txBody');
-  if (!txs.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted)">No recent transactions</div>'; return; }
-  el.innerHTML = txs.slice(0, 6).map(tx => {
-    const t = (tx.type || '').toLowerCase().includes('buy') ? 'buy' : (tx.type || '').toLowerCase().includes('sell') ? 'sell' : 'div';
+  const list = Array.isArray(txs) ? txs : (txs?.orders || []);
+  if (!list.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted)">No recent transactions</div>'; return; }
+  el.innerHTML = list.slice(0, 6).map(tx => {
+    const side = (tx.action || tx.side || '').toLowerCase();
+    const t = side.includes('buy') ? 'buy' : side.includes('sell') ? 'sell' : 'div';
     const icon = t === 'buy' ? '↑' : t === 'sell' ? '↓' : '＄';
-    const val = tx.price && tx.units ? tx.price * tx.units : (tx.amount || 0);
+    const qty = tx.units || tx.quantity || 0;
+    const price = tx.price || tx.limit_price || tx.stop_price || 0;
+    const val = qty && price ? qty * price : 0;
+    const sym = tx.symbol?.symbol || tx.symbol || tx.universal_symbol?.symbol || 'Order';
+    const date = tx.settled_date || tx.created_time || tx.placement_time || '';
     return `<div class="tx-item">
       <div class="tx-icon ${t}">${icon}</div>
-      <div class="tx-info"><div class="tx-sym">${tx.symbol || tx.description || 'Transaction'}</div><div class="tx-date">${tx.settlement_date ? new Date(tx.settlement_date).toLocaleDateString() : '—'}</div></div>
-      <div><div class="tx-val ${t === 'sell' ? 'down' : 'up'}">$${fmt(Math.abs(val))}</div><div class="tx-qty">${tx.units ? fmt(tx.units, 2) + ' units' : tx.type || ''}</div></div>
+      <div class="tx-info"><div class="tx-sym">${sym}</div><div class="tx-date">${date ? new Date(date).toLocaleDateString() : '—'}</div></div>
+      <div><div class="tx-val ${t === 'sell' ? 'down' : 'up'}">${val > 0 ? '$' + fmt(Math.abs(val)) : (tx.status || '—')}</div><div class="tx-qty">${qty ? fmt(qty, 4) + ' units' : ''}</div></div>
     </div>`;
   }).join('');
 }
