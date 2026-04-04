@@ -656,7 +656,7 @@ function renderBenchmark(benchmark) {
       <div class="bench-bar-track"><div class="bench-bar-fill" style="width:${spW}%;background:${spColor}"></div></div>
       <div class="bench-bar-pct" style="color:${spColor}">${spSign}${spChg.toFixed(2)}%</div>
     </div>
-    <div style="font-size:10px;color:var(--muted2);margin-top:10px;">Portfolio return is cumulative (vs. cost basis). S&P 500 shows today's % change.</div>`;
+    <div style="font-size:10px;color:var(--muted2);margin-top:10px;">⚠ Portfolio return = cumulative since purchase. S&P 500 = today's session change only.</div>`;
 }
 
 function renderRiskMetrics(quotes, pos) {
