@@ -735,7 +735,7 @@ function renderSectorExposure(quotes, pos) {
 
 // ── Holdings rendering ────────────────────────────────────
 function getType(p) {
-  const d = (p.symbol?.security_type?.description || p.symbol?.security_type || '').toLowerCase();
+  const d = String(p.symbol?.security_type?.description || p.symbol?.security_type || '').toLowerCase();
   const sym = (p.symbol?.symbol || '').toUpperCase();
   if (/crypto|digital|coin/.test(d) || ['BTC','ETH','SOL','DOGE','XRP','ADA','AVAX','MATIC','DOT','LINK'].includes(sym)) return 'crypto';
   if (/etf|fund|trust/.test(d)) return 'etf';
