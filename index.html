@@ -462,6 +462,8 @@ async function autoLogin(username, token) {
   } catch(e) {
     localStorage.removeItem('snapinsight-session');
     C = {};
+    document.getElementById('connectCard').style.display = 'grid';
+    document.getElementById('dashboard').style.display = 'none';
   }
 }
 
