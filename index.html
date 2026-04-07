@@ -560,7 +560,7 @@ async function connect() {
             if (accts.length) {
               document.getElementById('connectCard').style.display = 'none';
               document.getElementById('dashboard').style.display = 'block';
-              selectAccount(accts);
+              selectAccount(accts, true); // force picker — user just added a broker, let them choose
             }
           } catch(e2) {}
         }
@@ -599,10 +599,18 @@ async function connect() {
 }
 
 // ── Account selection ─────────────────────────────────────
-function selectAccount(accounts) {
+function selectAccount(accounts, forceShowPicker = false) {
   if (accounts.length === 1) {
     activateAccount(accounts[0]);
     return;
+  }
+  // Try to restore last-used account from localStorage
+  if (!forceShowPicker) {
+    const lastId = localStorage.getItem('snapinsight-accountId');
+    if (lastId) {
+      const match = accounts.find(a => a.id === lastId);
+      if (match) { activateAccount(match); return; }
+    }
   }
   // Multiple accounts — show picker
   document.getElementById('accountPicker').style.display = 'block';
@@ -618,6 +626,7 @@ function selectAccount(accounts) {
 
 function activateAccount(acct) {
   C.accountId = acct.id;
+  localStorage.setItem('snapinsight-accountId', acct.id);
   document.getElementById('accountPicker').style.display = 'none';
   document.getElementById('pbName').textContent = acct.name || 'My Portfolio';
   document.getElementById('pbSub').textContent = `${acct.institution_name || 'Brokerage'} · ${(acct.id || '').slice(0, 8)}`;
@@ -1057,6 +1066,7 @@ function runAI() {
 function disconnect() {
   C = {}; window._pd = null;
   localStorage.removeItem('snapinsight-session');
+  localStorage.removeItem('snapinsight-accountId');
   if (allocChartInstance) { allocChartInstance.destroy(); allocChartInstance = null; }
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('connectCard').style.display = 'grid';
