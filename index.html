@@ -519,13 +519,15 @@ async function connect() {
   if (!username) { err.textContent = 'Please enter a User ID.'; err.style.display = 'block'; return; }
   if (!password)  { err.textContent = 'Please enter a password.'; err.style.display = 'block'; return; }
   btn.classList.add('loading'); btn.disabled = true;
+  // Open blank popup immediately inside user gesture — before any await — so browser doesn't block it
+  const brokerPopup = window.open('', 'snaptrade_connect', 'width=520,height=720,left=200,top=100');
   try {
     const sr = await fetch(`${PROXY}/signup`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
     const sd = await sr.json();
-    if (!sr.ok) throw new Error(sd.error || 'Sign up failed');
+    if (!sr.ok) { if (brokerPopup) brokerPopup.close(); throw new Error(sd.error || 'Sign up failed'); }
     C.token = sd.token;
     if (document.getElementById('rememberMe').checked) {
       localStorage.setItem('snapinsight-session', JSON.stringify({ username, token: sd.token }));
@@ -541,8 +543,9 @@ async function connect() {
       });
       const cd = await cr.json();
       if (cd.redirectURI) {
-        const popup = window.open(cd.redirectURI, 'snaptrade_connect', 'width=520,height=720,left=200,top=100');
+        const popup = brokerPopup || window.open('', 'snaptrade_connect', 'width=520,height=720,left=200,top=100');
         if (!popup) { window.location.href = cd.redirectURI; return; }
+        popup.location.href = cd.redirectURI;
         btn.classList.remove('loading'); btn.disabled = false;
         const OUR_ORIGIN = 'https://iamvk07.github.io';
 
@@ -577,10 +580,13 @@ async function connect() {
       }
       throw new Error(cd.error || 'Failed to get brokerage connection URL.');
     }
+    // Already has accounts — close the blank popup we opened speculatively
+    if (brokerPopup && !brokerPopup.closed) brokerPopup.close();
     document.getElementById('connectCard').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     selectAccount(accounts);
   } catch(e) {
+    if (brokerPopup && !brokerPopup.closed) brokerPopup.close();
     err.textContent = e.message; err.style.display = 'block';
   }
   btn.classList.remove('loading'); btn.disabled = false;
