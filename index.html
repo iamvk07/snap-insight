@@ -527,7 +527,7 @@ async function connect() {
       body: JSON.stringify({ username, password })
     });
     const sd = await sr.json();
-    if (!sr.ok) { if (brokerPopup) brokerPopup.close(); throw new Error(sd.error || 'Sign up failed'); }
+    if (!sr.ok) { if (brokerPopup) brokerPopup.close(); if (sr.status === 401) localStorage.removeItem('snapinsight-session'); throw new Error(sd.error || 'Sign up failed'); }
     C.token = sd.token;
     if (document.getElementById('rememberMe').checked) {
       localStorage.setItem('snapinsight-session', JSON.stringify({ username, token: sd.token }));
@@ -543,8 +543,8 @@ async function connect() {
       });
       const cd = await cr.json();
       if (cd.redirectURI) {
-        const popup = brokerPopup || window.open('', 'snaptrade_connect', 'width=520,height=720,left=200,top=100');
-        if (!popup) { window.location.href = cd.redirectURI; return; }
+        const popup = brokerPopup;
+        if (!popup || popup.closed) { window.location.href = cd.redirectURI; return; }
         popup.location.href = cd.redirectURI;
         btn.classList.remove('loading'); btn.disabled = false;
         const OUR_ORIGIN = 'https://iamvk07.github.io';
@@ -573,7 +573,10 @@ async function connect() {
         const timer = setInterval(() => {
           try {
             if (popup.location.origin === OUR_ORIGIN) { clearInterval(timer); finishConnect(); return; }
-          } catch (e) { /* cross-origin */ }
+          } catch (e) {
+            if (!(e instanceof DOMException)) { clearInterval(timer); finishConnect(); return; }
+            // DOMException = cross-origin, still on SnapTrade — keep polling
+          }
           if (popup.closed) { clearInterval(timer); finishConnect(); }
         }, 400);
         return;
@@ -1004,7 +1007,8 @@ function renderTx(txs) {
     const qty = tx.filled_quantity||tx.total_quantity||0;
     const price = tx.execution_price||tx.limit_price||tx.stop_price||0;
     const val = qty&&price ? qty*price : 0;
-    const sym = tx.universal_symbol?.symbol||tx.symbol?.symbol||'Order';
+    const _txs = tx.universal_symbol?.symbol || tx.symbol?.symbol || 'Order';
+    const sym = typeof _txs === 'object' ? (_txs.symbol || _txs.description || _txs.id || '?') : String(_txs);
     const date = tx.time_placed||'';
     return `<div class="tx-item">
       <div class="tx-icon ${t}">${icon}</div>
