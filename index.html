@@ -464,8 +464,11 @@ async function autoLogin(username, token) {
     document.getElementById('dashboard').style.display = 'block';
     selectAccount(accounts);
   } catch(e) {
-    localStorage.removeItem('snapinsight-session');
-    C = {};
+    // Only wipe saved session on auth failure — not on network/cold-start errors
+    if (e.isApiError) {
+      localStorage.removeItem('snapinsight-session');
+      C = {};
+    }
     document.getElementById('connectCard').style.display = 'grid';
     document.getElementById('dashboard').style.display = 'none';
   }
@@ -524,7 +527,7 @@ async function connect() {
   try {
     const sr = await fetch(`${PROXY}/signup`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, token: C.token || localStorage.getItem('snapinsight-session') ? JSON.parse(localStorage.getItem('snapinsight-session') || '{}').token : undefined })
+      body: JSON.stringify({ username, password, token: C.token || JSON.parse(localStorage.getItem('snapinsight-session') || '{}').token })
     });
     const sd = await sr.json();
     if (!sr.ok) { if (brokerPopup) brokerPopup.close(); if (sr.status === 401) localStorage.removeItem('snapinsight-session'); throw new Error(sd.error || 'Sign up failed'); }
