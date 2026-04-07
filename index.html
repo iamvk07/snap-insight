@@ -618,7 +618,7 @@ function selectAccount(accounts, forceShowPicker = false) {
     <div onclick="activateAccount(${JSON.stringify(a).replace(/"/g, '&quot;')})" style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--card-border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background='transparent'">
       <div>
         <div style="font-weight:700;font-size:14px;">${a.name || 'Account'}</div>
-        <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.institution_name || ''} · ${(a.id || '').slice(0,8)}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.institution_name || ''}${a.number ? ' · ' + a.number : ''}${a.raw_type ? ' · ' + a.raw_type : ''}</div>
       </div>
       <div style="color:var(--blue);font-size:13px;font-weight:600;">Select →</div>
     </div>`).join('');
@@ -629,7 +629,10 @@ function activateAccount(acct) {
   localStorage.setItem('snapinsight-accountId', acct.id);
   document.getElementById('accountPicker').style.display = 'none';
   document.getElementById('pbName').textContent = acct.name || 'My Portfolio';
-  document.getElementById('pbSub').textContent = `${acct.institution_name || 'Brokerage'} · ${(acct.id || '').slice(0, 8)}`;
+  const subParts = [acct.institution_name || 'Brokerage'];
+  if (acct.number) subParts.push(acct.number);
+  if (acct.raw_type) subParts.push(acct.raw_type);
+  document.getElementById('pbSub').textContent = subParts.join(' · ');
   document.getElementById('pbAvatar').textContent = (acct.institution_name || 'P')[0];
   loadAll();
 }
