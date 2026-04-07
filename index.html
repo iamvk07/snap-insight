@@ -524,7 +524,7 @@ async function connect() {
   try {
     const sr = await fetch(`${PROXY}/signup`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, token: C.token || localStorage.getItem('snapinsight-session') ? JSON.parse(localStorage.getItem('snapinsight-session') || '{}').token : undefined })
     });
     const sd = await sr.json();
     if (!sr.ok) { if (brokerPopup) brokerPopup.close(); if (sr.status === 401) localStorage.removeItem('snapinsight-session'); throw new Error(sd.error || 'Sign up failed'); }
