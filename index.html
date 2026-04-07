@@ -540,7 +540,29 @@ async function connect() {
         body: JSON.stringify({ token: C.token })
       });
       const cd = await cr.json();
-      if (cd.redirectURI) { window.location.href = cd.redirectURI; return; }
+      if (cd.redirectURI) {
+        const popup = window.open(cd.redirectURI, 'snaptrade_connect', 'width=520,height=720,left=200,top=100');
+        if (!popup) { window.location.href = cd.redirectURI; return; }
+        btn.classList.remove('loading'); btn.disabled = false;
+        const OUR_ORIGIN = 'https://iamvk07.github.io';
+        const timer = setInterval(async () => {
+          try {
+            if (popup.location.origin === OUR_ORIGIN) popup.close();
+          } catch (e) { /* cross-origin, still on SnapTrade */ }
+          if (popup.closed) {
+            clearInterval(timer);
+            try {
+              const accts = await api('/accounts');
+              if (accts.length) {
+                document.getElementById('connectCard').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                selectAccount(accts);
+              }
+            } catch(e2) {}
+          }
+        }, 500);
+        return;
+      }
       throw new Error(cd.error || 'Failed to get brokerage connection URL.');
     }
     document.getElementById('connectCard').style.display = 'none';
