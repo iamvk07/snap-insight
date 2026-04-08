@@ -280,6 +280,9 @@ body.light .type-other{background:rgba(0,0,0,.05);}
 .perf-table tr:last-child td{border-bottom:none;}
 .perf-td{padding:10px 12px;display:block;}
 .perf-cell{padding:10px 14px;font-family:var(--mono);font-size:13px;font-weight:600;text-align:right;border-radius:4px;}
+.perf-tabs{display:flex;gap:6px;margin-left:auto;}
+.perf-tab{padding:4px 14px;border-radius:20px;border:1px solid var(--card-b);font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);transition:all .15s;font-family:var(--sans);}
+.perf-tab.active,.perf-tab:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
 
 /* Account picker (first time) */
 #accountPicker{margin-bottom:20px;}
@@ -506,55 +509,83 @@ body.light .type-other{background:rgba(0,0,0,.05);}
         </div>
 
         <!-- Summary stats -->
-        <div class="g3 mb-20">
+        <div class="stats-row mb-20" style="grid-template-columns:repeat(4,1fr);">
           <div class="stat-card">
-            <div class="sc-label">Your Portfolio Return</div>
+            <div class="sc-label">Portfolio Total Return</div>
             <div class="sc-val" id="portPeriodReturn">—</div>
-            <div class="sc-sub">vs. cost basis (total)</div>
+            <div class="sc-sub">vs. cost basis (all-time)</div>
           </div>
           <div class="stat-card">
-            <div class="sc-label">SPY 1Y Return</div>
-            <div class="sc-val" id="spyPeriodReturn">—</div>
-            <div class="sc-sub">S&amp;P 500 ETF</div>
+            <div class="sc-label">Portfolio Today</div>
+            <div class="sc-val" id="portDailyReturn">—</div>
+            <div class="sc-sub">Today's weighted change</div>
           </div>
           <div class="stat-card">
-            <div class="sc-label">vs. SPY (1Y)</div>
-            <div class="sc-val" id="vsSpy">—</div>
-            <div class="sc-sub">Alpha (approx.)</div>
+            <div class="sc-label">S&amp;P 500 Today</div>
+            <div class="sc-val" id="spyDailyReturn">—</div>
+            <div class="sc-sub">SPY daily change</div>
+          </div>
+          <div class="stat-card">
+            <div class="sc-label">Daily Alpha</div>
+            <div class="sc-val" id="vsDailyReturn">—</div>
+            <div class="sc-sub">Portfolio − SPY (today)</div>
           </div>
         </div>
 
-        <!-- Monthly bar chart -->
+        <!-- Chart with monthly/yearly tabs -->
         <div class="card mb-16">
           <div class="card-hdr">
             <span style="font-size:14px;">📊</span>
-            <span class="card-title">S&amp;P 500 Monthly Returns</span>
+            <span class="card-title">S&amp;P 500 Historical Returns</span>
             <span class="card-badge" id="perfBadge">Loading...</span>
+            <div class="perf-tabs">
+              <button class="perf-tab active" id="tab-monthly" onclick="switchPerfTab('monthly')">Monthly</button>
+              <button class="perf-tab" id="tab-yearly" onclick="switchPerfTab('yearly')">Yearly</button>
+            </div>
           </div>
           <div class="card-body">
-            <div class="perf-bar-wrap"><canvas id="perfChart"></canvas></div>
+            <div id="perfWrap-monthly"><div class="perf-bar-wrap"><canvas id="perfChart"></canvas></div></div>
+            <div id="perfWrap-yearly" style="display:none;"><div class="perf-bar-wrap" style="height:260px;"><canvas id="perfChartYearly"></canvas></div></div>
           </div>
         </div>
 
-        <!-- Monthly returns table -->
+        <!-- Data table (monthly + yearly) -->
         <div class="card">
           <div class="card-hdr">
             <span style="font-size:14px;">📋</span>
-            <span class="card-title">Historical Return vs S&amp;P 500</span>
+            <span class="card-title" id="tableTitle">Monthly Returns</span>
             <span style="font-size:10px;color:var(--muted);margin-left:auto;">SPY as S&amp;P 500 proxy</span>
           </div>
-          <div class="card-body" style="padding:0;">
+          <!-- Monthly table -->
+          <div id="tableWrap-monthly" style="padding:0;">
             <table class="perf-table">
               <thead>
                 <tr>
-                  <th style="padding:10px 16px;">Period</th>
-                  <th style="text-align:right;padding:10px 16px;">Your Portfolio</th>
-                  <th style="text-align:right;padding:10px 16px;">S&amp;P 500</th>
-                  <th style="text-align:right;padding:10px 16px;">vs S&amp;P 500</th>
+                  <th style="padding:10px 16px;">Month</th>
+                  <th style="text-align:center;padding:10px 16px;">S&amp;P 500 Return</th>
+                  <th style="text-align:right;padding:10px 16px;">Market Signal</th>
                 </tr>
               </thead>
               <tbody id="monthlyTableBody">
-                <tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Loading...</td></tr>
+                <tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Yearly table -->
+          <div id="tableWrap-yearly" style="padding:0;display:none;">
+            <div style="padding:10px 16px 6px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--card-b);">
+              Compare your <strong style="color:var(--ink);">Portfolio Total Return</strong> (top left card) to the relevant year(s) below.
+            </div>
+            <table class="perf-table">
+              <thead>
+                <tr>
+                  <th style="padding:10px 16px;">Year</th>
+                  <th style="text-align:center;padding:10px 16px;">S&amp;P 500 Return</th>
+                  <th style="text-align:right;padding:10px 16px;">Market Signal</th>
+                </tr>
+              </thead>
+              <tbody id="yearlyTableBody">
+                <tr><td colspan="3" style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -665,6 +696,8 @@ body.light .type-other{background:rgba(0,0,0,.05);}
 let C = {};
 let allocChartInstance = null;
 let perfChartInstance = null;
+let perfChartYearlyInstance = null;
+let _perfActiveTab = 'monthly';
 let _allAccounts = [];
 let _totalInvested = 0;
 let _portfolioValue = 0;
@@ -1101,6 +1134,20 @@ function renderBenchmark(benchmark, quotes) {
       <div class="bench-bar-pct" style="color:${spColor}">${spSign}${spChg.toFixed(2)}%</div>
     </div>
     <div style="font-size:10px;color:var(--muted2);margin-top:10px;">Both figures = today's daily % change. Weighted by position size.</div>`;
+
+  // Push daily values to Performance page cards
+  const pdr = document.getElementById('portDailyReturn');
+  if (pdr) {
+    pdr.textContent = portChg != null ? `${portChg >= 0 ? '+' : ''}${portChg.toFixed(2)}%` : '—';
+    pdr.style.color = portChg != null ? (portChg >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--muted)';
+    const sdr = document.getElementById('spyDailyReturn');
+    sdr.textContent = `${spChg >= 0 ? '+' : ''}${spChg.toFixed(2)}%`;
+    sdr.style.color = spChg >= 0 ? 'var(--green)' : 'var(--red)';
+    const alpha = portChg != null ? portChg - spChg : null;
+    const vdr = document.getElementById('vsDailyReturn');
+    vdr.textContent = alpha != null ? `${alpha >= 0 ? '+' : ''}${alpha.toFixed(2)}%` : '—';
+    vdr.style.color = alpha != null ? (alpha >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--muted)';
+  }
 }
 
 function renderRiskMetrics(quotes, pos) {
@@ -1369,11 +1416,10 @@ function renderTx(txs) {
   }).join('');
 }
 
-// ── Performance Chart + Monthly Table ────────────────────
-// Historical S&P 500 monthly returns (SPY open-to-close), most recent first
-// Sources: Yahoo Finance, Investing.com historical data
+// ── Performance Chart + Tables ────────────────────────────
+// S&P 500 monthly returns (SPY), most recent first. Sources: Yahoo Finance / Investing.com
 const SP500_MONTHLY = [
-  { label:'2026-04', ret: 2.84 },  // partial month, to Apr 8
+  { label:'2026-04', ret: 2.84 },  // partial, to Apr 8
   { label:'2026-03', ret:-5.09 },
   { label:'2026-02', ret:-0.87 },
   { label:'2026-01', ret: 1.37 },
@@ -1399,88 +1445,134 @@ const SP500_MONTHLY = [
   { label:'2024-05', ret: 4.80 },
 ];
 
+// S&P 500 annual returns (price total return, SPY-equivalent)
+const SP500_YEARLY = [
+  { label:'2026 YTD', ret: -1.75 },  // Jan+Feb+Mar+Apr(partial): 1.37-0.87-5.09+2.84
+  { label:'2025',     ret: 19.45 },  // sum of Jan-Dec monthly
+  { label:'2024',     ret: 23.31 },
+  { label:'2023',     ret: 24.23 },
+  { label:'2022',     ret:-19.44 },
+  { label:'2021',     ret: 26.89 },
+  { label:'2020',     ret: 16.26 },
+  { label:'2019',     ret: 28.88 },
+  { label:'2018',     ret: -6.24 },
+  { label:'2017',     ret: 19.42 },
+  { label:'2016',     ret:  9.54 },
+  { label:'2015',     ret: -0.73 },
+  { label:'2014',     ret: 11.39 },
+  { label:'2013',     ret: 29.60 },
+];
+
+function switchPerfTab(tab) {
+  _perfActiveTab = tab;
+  document.getElementById('tab-monthly').classList.toggle('active', tab === 'monthly');
+  document.getElementById('tab-yearly').classList.toggle('active', tab === 'yearly');
+  document.getElementById('perfWrap-monthly').style.display = tab === 'monthly' ? '' : 'none';
+  document.getElementById('perfWrap-yearly').style.display  = tab === 'yearly'  ? '' : 'none';
+  document.getElementById('tableWrap-monthly').style.display = tab === 'monthly' ? '' : 'none';
+  document.getElementById('tableWrap-yearly').style.display  = tab === 'yearly'  ? '' : 'none';
+  document.getElementById('tableTitle').textContent = tab === 'monthly' ? 'Monthly Returns' : 'Yearly Returns';
+  if (tab === 'monthly') renderMonthlyChart();
+  else renderYearlyChart();
+}
+
 function loadPerformanceChart() {
-  const badge = document.getElementById('perfBadge');
-  const months = SP500_MONTHLY;
+  document.getElementById('perfBadge').textContent = 'S&P 500 · 2yr history';
+  if (_perfActiveTab === 'monthly') renderMonthlyChart();
+  else renderYearlyChart();
+}
 
-  // SPY 1Y return = sum of months 2-13 (skip partial current month)
-  const last12 = months.slice(1, 13);
-  const spy1YReturn = last12.reduce((s, m) => s + m.ret, 0);
-  badge.textContent = 'S&P 500 · 2yr history';
-
-  // Update stat cards
-  document.getElementById('spyPeriodReturn').textContent = `${spy1YReturn >= 0 ? '+' : ''}${spy1YReturn.toFixed(2)}%`;
-  document.getElementById('spyPeriodReturn').style.color = spy1YReturn >= 0 ? 'var(--green)' : 'var(--red)';
-  const portRet = _totalInvested > 0 ? (_portfolioValue - _totalInvested) / _totalInvested * 100 : null;
-  if (portRet !== null) {
-    const vs = portRet - spy1YReturn;
-    document.getElementById('vsSpy').textContent = `${vs >= 0 ? '+' : ''}${vs.toFixed(2)}%`;
-    document.getElementById('vsSpy').style.color = vs >= 0 ? 'var(--green)' : 'var(--red)';
-  }
-
-  // Bar chart — last 12 full months chronological
-  const chartMonths = [...last12].reverse();
+function renderMonthlyChart() {
+  // Last 12 full months (skip partial current month), chronological
+  const chartMonths = [...SP500_MONTHLY.slice(1, 13)].reverse();
   const isDark = !document.body.classList.contains('light');
   const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
   const textColor = isDark ? 'rgba(232,232,242,.45)' : 'rgba(17,17,24,.45)';
-
   const ctx = document.getElementById('perfChart').getContext('2d');
   if (perfChartInstance) perfChartInstance.destroy();
   perfChartInstance = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: chartMonths.map(m => m.label),
-      datasets: [{
-        label: 'S&P 500',
-        data: chartMonths.map(m => m.ret),
+      datasets: [{ label:'S&P 500', data: chartMonths.map(m => m.ret),
         backgroundColor: chartMonths.map(m => m.ret >= 0 ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.8)'),
-        borderRadius: 4, borderSkipped: false
-      }]
+        borderRadius: 4, borderSkipped: false }]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { intersect: false, mode: 'index' },
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => ` S&P 500: ${c.parsed.y >= 0 ? '+' : ''}${c.parsed.y.toFixed(2)}%` } }
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } } },
-        y: { grid: { color: gridColor }, ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 }, callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' } }
+    options: { responsive:true, maintainAspectRatio:false,
+      interaction:{ intersect:false, mode:'index' },
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: c => ` S&P 500: ${c.parsed.y >= 0 ? '+':''}${c.parsed.y.toFixed(2)}%` } } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{ color:textColor, font:{family:'JetBrains Mono',size:10} } },
+        y:{ grid:{color:gridColor}, ticks:{ color:textColor, font:{family:'JetBrains Mono',size:10}, callback: v => (v>=0?'+':'')+v.toFixed(1)+'%' } }
       }
     }
   });
+  renderMonthlyTable();
+}
 
-  renderMonthlyTable(months, portRet);
+function renderYearlyChart() {
+  const years = [...SP500_YEARLY].reverse(); // oldest first for chart
+  const isDark = !document.body.classList.contains('light');
+  const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
+  const textColor = isDark ? 'rgba(232,232,242,.45)' : 'rgba(17,17,24,.45)';
+  const ctx = document.getElementById('perfChartYearly').getContext('2d');
+  if (perfChartYearlyInstance) perfChartYearlyInstance.destroy();
+  perfChartYearlyInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: years.map(y => y.label),
+      datasets: [{ label:'S&P 500', data: years.map(y => y.ret),
+        backgroundColor: years.map(y => y.ret >= 0 ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.8)'),
+        borderRadius: 4, borderSkipped: false }]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      interaction:{ intersect:false, mode:'index' },
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: c => ` S&P 500: ${c.parsed.y >= 0 ? '+':''}${c.parsed.y.toFixed(2)}%` } } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{ color:textColor, font:{family:'JetBrains Mono',size:10}, maxRotation:45 } },
+        y:{ grid:{color:gridColor}, ticks:{ color:textColor, font:{family:'JetBrains Mono',size:10}, callback: v => (v>=0?'+':'')+v.toFixed(0)+'%' } }
+      }
+    }
+  });
+  renderYearlyTable();
 }
 
 function cellBg(ret) {
-  const a = Math.min(Math.abs(ret) / 5, 1);
+  const a = Math.min(Math.abs(ret) / 8, 1);
   return ret >= 0
-    ? `rgba(16,185,129,${0.15 + a * 0.6})`
-    : `rgba(239,68,68,${0.15 + a * 0.6})`;
+    ? `rgba(16,185,129,${0.2 + a * 0.65})`
+    : `rgba(239,68,68,${0.2 + a * 0.65})`;
 }
 
-function renderMonthlyTable(months, portTotalRet) {
-  const tbody = document.getElementById('monthlyTableBody');
-  if (!months.length) { tbody.innerHTML = '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--muted);font-size:13px;">No data</td></tr>'; return; }
+function marketSignal(ret, yearly = false) {
+  if (yearly) return ret >= 20 ? '🚀 Bull Run' : ret >= 8 ? '📈 Strong' : ret >= 0 ? '➕ Positive' : ret >= -10 ? '📉 Weak' : '🐻 Bear';
+  return ret >= 3 ? '📈 Strong' : ret >= 0 ? '➕ Positive' : ret >= -3 ? '📉 Weak' : '🔴 Down';
+}
 
-  // We only have portfolio TOTAL return, not per-month — show it for latest month row, "—" for others
-  const latestLabel = months[0]?.label;
-  tbody.innerHTML = months.map((m, i) => {
-    const spyCell = `<div class="perf-cell" style="background:${cellBg(m.ret)};color:#fff;">${m.ret >= 0 ? '+' : ''}${m.ret.toFixed(2)}%</div>`;
-    const portCell = (i === 0 && portTotalRet != null)
-      ? `<div class="perf-cell" style="background:${cellBg(portTotalRet)};color:#fff;">${portTotalRet >= 0 ? '+' : ''}${portTotalRet.toFixed(2)}%</div>`
-      : `<div class="perf-cell" style="color:var(--muted);">—</div>`;
-    const vs = (i === 0 && portTotalRet != null) ? portTotalRet - m.ret : null;
-    const vsCell = vs != null
-      ? `<div class="perf-cell" style="background:${cellBg(vs)};color:#fff;">${vs >= 0 ? '+' : ''}${vs.toFixed(2)}%</div>`
-      : `<div class="perf-cell" style="color:var(--muted);">—</div>`;
+function renderMonthlyTable() {
+  const tbody = document.getElementById('monthlyTableBody');
+  tbody.innerHTML = SP500_MONTHLY.map(m => {
+    const sign = m.ret >= 0 ? '+' : '';
+    const sigColor = m.ret >= 0 ? 'var(--green)' : 'var(--red)';
     return `<tr>
-      <td style="padding:0 4px 0 16px;"><span style="font-family:var(--mono);font-size:13px;font-weight:600;">${m.label}</span></td>
-      <td style="padding:4px;">${portCell}</td>
-      <td style="padding:4px;">${spyCell}</td>
-      <td style="padding:4px 16px 4px 4px;">${vsCell}</td>
+      <td style="padding:10px 16px;"><span style="font-family:var(--mono);font-size:13px;font-weight:600;">${m.label}</span></td>
+      <td style="padding:4px 16px;text-align:center;"><div class="perf-cell" style="background:${cellBg(m.ret)};color:#fff;display:inline-block;min-width:100px;text-align:center;">${sign}${m.ret.toFixed(2)}%</div></td>
+      <td style="padding:10px 16px;text-align:right;font-size:11px;color:${sigColor};">${marketSignal(m.ret)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderYearlyTable() {
+  const tbody = document.getElementById('yearlyTableBody');
+  tbody.innerHTML = SP500_YEARLY.map(y => {
+    const sign = y.ret >= 0 ? '+' : '';
+    const sigColor = y.ret >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<tr>
+      <td style="padding:10px 16px;"><span style="font-family:var(--mono);font-size:13px;font-weight:600;">${y.label}</span>${y.label.includes('YTD') ? ' <span style="font-size:9px;background:rgba(99,102,241,.15);color:var(--accent);padding:2px 6px;border-radius:10px;">partial</span>' : ''}</td>
+      <td style="padding:4px 16px;text-align:center;"><div class="perf-cell" style="background:${cellBg(y.ret)};color:#fff;display:inline-block;min-width:100px;text-align:center;">${sign}${y.ret.toFixed(2)}%</div></td>
+      <td style="padding:10px 16px;text-align:right;font-size:11px;color:${sigColor};">${marketSignal(y.ret, true)}</td>
     </tr>`;
   }).join('');
 }
@@ -1524,6 +1616,8 @@ function disconnect() {
   localStorage.removeItem('snapinsight-accountId');
   if (allocChartInstance) { allocChartInstance.destroy(); allocChartInstance = null; }
   if (perfChartInstance) { perfChartInstance.destroy(); perfChartInstance = null; }
+  if (perfChartYearlyInstance) { perfChartYearlyInstance.destroy(); perfChartYearlyInstance = null; }
+  _perfActiveTab = 'monthly';
   document.getElementById('aiThinking').style.display = 'flex';
   document.getElementById('aiText').style.display = 'none';
   document.getElementById('aiMetrics').style.display = 'none';
