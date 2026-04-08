@@ -120,6 +120,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 
 /* Stats row */
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.stats-row-4{grid-template-columns:repeat(4,1fr)!important;}
 .stat-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--radius);padding:18px 20px;transition:transform .15s;}
 .stat-card:hover{transform:translateY(-2px);}
 .sc-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px;}
@@ -300,6 +301,7 @@ body.light .type-other{background:rgba(0,0,0,.05);}
   .cs-wrap{grid-template-columns:1fr;max-width:420px;}
   .cs-left{display:none;}
   .stats-row{grid-template-columns:1fr 1fr;}
+  .stats-row-4{grid-template-columns:1fr 1fr!important;}
   .mkt-grid{grid-template-columns:repeat(4,1fr);}
   .g2,.g3{grid-template-columns:1fr;}
   .g4{grid-template-columns:1fr 1fr;}
@@ -509,7 +511,7 @@ body.light .type-other{background:rgba(0,0,0,.05);}
         </div>
 
         <!-- Summary stats -->
-        <div class="stats-row mb-20" style="grid-template-columns:repeat(4,1fr);">
+        <div class="stats-row stats-row-4 mb-20">
           <div class="stat-card">
             <div class="sc-label">Portfolio Total Return</div>
             <div class="sc-val" id="portPeriodReturn">—</div>
@@ -710,6 +712,9 @@ function toggleDark() {
   document.getElementById('darkBtn').textContent = isLight ? '🌙' : '☀️';
   localStorage.setItem('snapinsight-theme', isLight ? 'light' : 'dark');
   if (allocChartInstance) rebuildAllocChart();
+  // L2 fix: rebuild performance charts so axis colours update immediately
+  const activePage = document.querySelector('.page.active');
+  if (activePage && activePage.id === 'page-performance') loadPerformanceChart();
 }
 (function initTheme() {
   if (localStorage.getItem('snapinsight-theme') === 'light') {
@@ -739,14 +744,13 @@ async function autoLogin(username, token) {
   C.token = token;
   try {
     const accounts = await api('/accounts');
-    if (!accounts.length) return;
+    if (!accounts.length) { showConnect(); return; }  // C2/H8 fix: always show connect if no accounts
     showApp();
     selectAccount(accounts);
   } catch(e) {
-    if (e.isApiError) {
-      localStorage.removeItem('snapinsight-session');
-      C = {};
-    }
+    // C1 fix: clear stale session for all errors, not just API errors
+    localStorage.removeItem('snapinsight-session');
+    C = {};
     showConnect();
   }
 }
@@ -789,11 +793,16 @@ function showPage(name) {
 
 // ── API helpers ───────────────────────────────────────────
 function animateCounter(el, target, prefix = '$', decimals = 2) {
+  // C3 fix: guard NaN/null target and null element
+  if (!el) return;
+  if (target == null || isNaN(target)) { el.textContent = prefix + '0.00'; return; }
+  const absTarget = Math.abs(target);
+  const sign = target < 0 ? '-' : '';
   const duration = 800, startTime = performance.now();
   function step(now) {
     const p = Math.min((now - startTime) / duration, 1);
-    const val = target * (1 - Math.pow(1 - p, 3));
-    el.textContent = prefix + val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    const val = absTarget * (1 - Math.pow(1 - p, 3));
+    el.textContent = sign + prefix + val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
     if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -905,6 +914,12 @@ async function connect() {
 }
 
 // ── Account selection ─────────────────────────────────────
+// H2 fix: use account ID lookup instead of JSON.stringify in onclick (safe for names with quotes/backslashes)
+function activateAccountById(id) {
+  const acct = _allAccounts.find(a => a.id === id);
+  if (acct) activateAccount(acct);
+}
+
 function buildAccountDropdown() {
   const chevron = document.getElementById('pbChevron');
   const list = document.getElementById('accountDropdownList');
@@ -915,7 +930,8 @@ function buildAccountDropdown() {
     const sub = [a.institution_name || ''];
     if (a.number) sub.push(a.number);
     if (a.raw_type) sub.push(a.raw_type);
-    return `<div class="acct-dd-item${isActive?' active-acct':''}" onclick="activateAccount(${JSON.stringify(a).replace(/"/g, '&quot;')})">
+    const safeId = String(a.id).replace(/'/g, '');
+    return `<div class="acct-dd-item${isActive?' active-acct':''}" onclick="activateAccountById('${safeId}')">
       <div>
         <div class="acct-dd-name">${a.name || 'Account'}${isActive ? ' <span style="color:var(--green);font-size:10px;">✓</span>' : ''}</div>
         <div class="acct-dd-sub">${sub.filter(Boolean).join(' · ')}</div>
@@ -969,14 +985,16 @@ function selectAccount(accounts, forceShowPicker = false) {
     }
   }
   document.getElementById('accountPicker').style.display = 'block';
-  document.getElementById('accountList').innerHTML = accounts.map(a => `
-    <div onclick="activateAccount(${JSON.stringify(a).replace(/"/g, '&quot;')})" style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--card-b);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='var(--card-h)'" onmouseout="this.style.background='transparent'">
+  document.getElementById('accountList').innerHTML = accounts.map(a => {
+    const safeId = String(a.id).replace(/'/g, '');
+    return `<div onclick="activateAccountById('${safeId}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--card-b);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='var(--card-h)'" onmouseout="this.style.background='transparent'">
       <div>
         <div style="font-weight:700;font-size:14px;">${a.name || 'Account'}</div>
         <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.institution_name || ''}${a.number ? ' · ' + a.number : ''}${a.raw_type ? ' · ' + a.raw_type : ''}</div>
       </div>
       <div style="font-size:13px;font-weight:600;color:var(--accent);">Select →</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function activateAccount(acct) {
@@ -1094,11 +1112,12 @@ function renderBenchmark(benchmark, quotes) {
   if (quotes && quotes.length) {
     const qmap = {};
     quotes.forEach(q => qmap[q.symbol] = q);
-    const totalMV = pos.reduce((s, p) => s + (p.price * (p.units ?? p.fractional_units ?? 0) || 0), 0);
+    // C4/H7 fix: guard p.price null/0 to avoid NaN in totalMV and division
+    const totalMV = pos.reduce((s, p) => s + ((p.price || 0) * (p.units ?? p.fractional_units ?? 0)), 0);
     if (totalMV > 0) {
       const weighted = pos.reduce((s, p) => {
         const q = qmap[getSym(p)];
-        const mv = p.price * (p.units ?? p.fractional_units ?? 0);
+        const mv = (p.price || 0) * (p.units ?? p.fractional_units ?? 0);
         return s + (q?.changePercent || 0) * mv;
       }, 0);
       portChg = weighted / totalMV;
@@ -1342,9 +1361,10 @@ function renderHoldings(data) {
   if (!pos.length) {
     treemap.innerHTML = '<span style="font-size:13px;color:var(--muted)">No positions yet</span>';
   } else {
-    const totalForMap = pos.reduce((s, p) => s+(p.price*(p.units ?? p.fractional_units ?? 0)||0), 0) || 1;
+    // H7 fix: guard p.price null so mv2 never becomes NaN → invalid CSS flex value
+    const totalForMap = pos.reduce((s, p) => s+((p.price||0)*(p.units ?? p.fractional_units ?? 0)), 0) || 1;
     treemap.innerHTML = pos.map(p => {
-      const mv2 = p.price * (p.units ?? p.fractional_units ?? 0);
+      const mv2 = (p.price || 0) * (p.units ?? p.fractional_units ?? 0);
       const w = Math.max(8, (mv2/totalForMap)*100);
       const ret = p.average_purchase_price > 0 ? ((p.price-p.average_purchase_price)/p.average_purchase_price*100) : 0;
       const bg = ret > 5 ? '#059669' : ret > 0 ? '#10b981' : ret > -5 ? '#ef4444' : '#dc2626';
@@ -1472,6 +1492,9 @@ function switchPerfTab(tab) {
   document.getElementById('tableWrap-monthly').style.display = tab === 'monthly' ? '' : 'none';
   document.getElementById('tableWrap-yearly').style.display  = tab === 'yearly'  ? '' : 'none';
   document.getElementById('tableTitle').textContent = tab === 'monthly' ? 'Monthly Returns' : 'Yearly Returns';
+  // H4 fix: only render chart if performance page is actually visible (canvas must be in DOM/visible for Chart.js)
+  const onPerfPage = document.getElementById('page-performance')?.classList.contains('active');
+  if (!onPerfPage) return;
   if (tab === 'monthly') renderMonthlyChart();
   else renderYearlyChart();
 }
@@ -1574,10 +1597,12 @@ function renderMonthlyTable() {
     const avgStr = `${histAvg >= 0 ? '+' : ''}${histAvg.toFixed(1)}%`;
     const vsHtml = `<span style="color:${diffColor};font-weight:700;">${diffStr}</span>
       <span style="color:var(--muted);font-size:10px;"> vs hist. avg ${avgStr}</span>`;
+    // M4 fix: mark the first entry as partial since it's a current in-progress month
+    const isPartial = i === 0;
     return `<tr>
-      <td style="padding:10px 16px;font-weight:600;">${fmtMonthFull(m.label)}</td>
+      <td style="padding:10px 16px;font-weight:600;">${fmtMonthFull(m.label)}${isPartial ? ' <span style="font-size:9px;background:rgba(99,102,241,.15);color:var(--accent);padding:2px 6px;border-radius:10px;font-weight:600;">partial</span>' : ''}</td>
       <td style="padding:4px 16px;text-align:center;"><div class="perf-cell" style="background:${cellBg(m.ret)};color:#fff;display:inline-block;min-width:100px;text-align:center;">${m.ret >= 0 ? '+' : ''}${m.ret.toFixed(2)}%</div></td>
-      <td style="padding:10px 16px;text-align:right;font-size:12px;">${vsHtml}</td>
+      <td style="padding:10px 16px;text-align:right;font-size:12px;">${isPartial ? '<span style="color:var(--muted);font-size:11px;">month in progress</span>' : vsHtml}</td>
     </tr>`;
   }).join('');
 }
@@ -1633,7 +1658,9 @@ function runAI() {
 
 // ── Disconnect / Refresh ──────────────────────────────────
 function disconnect() {
+  // H1 fix: reset all globals so stale data doesn't leak into next login
   C = {}; window._pd = null; _totalInvested = 0; _portfolioValue = 0;
+  _allAccounts = []; _chartData = null;
   localStorage.removeItem('snapinsight-session');
   localStorage.removeItem('snapinsight-accountId');
   if (allocChartInstance) { allocChartInstance.destroy(); allocChartInstance = null; }
