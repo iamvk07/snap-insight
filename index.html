@@ -295,7 +295,8 @@ body.light .type-other{background:rgba(0,0,0,.05);}
         </div>
         <div class="pb-sub" id="pbSub">Loading...</div>
         <!-- Account dropdown -->
-        <div id="accountDropdown" style="display:none;position:absolute;top:100%;left:0;margin-top:8px;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-sm);min-width:260px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.4);">
+        <div id="accountDropdown" style="display:none;position:absolute;top:calc(100% + 10px);left:0;background:var(--card);border:1px solid var(--card-border);border-radius:8px;min-width:280px;z-index:200;box-shadow:0 16px 40px rgba(0,0,0,.5);overflow:hidden;opacity:0;transform:translateY(-6px);transition:opacity .18s ease,transform .18s ease;">
+          <div style="padding:10px 14px 8px;border-bottom:1px solid var(--card-border);font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;">Switch Account</div>
           <div id="accountDropdownList"></div>
         </div>
       </div>
@@ -634,18 +635,35 @@ function toggleAccountDropdown() {
   if (_allAccounts.length <= 1) return;
   const dd = document.getElementById('accountDropdown');
   const chevron = document.getElementById('pbChevron');
-  const open = dd.style.display === 'block';
-  dd.style.display = open ? 'none' : 'block';
-  chevron.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+  const open = dd.dataset.open === '1';
+  if (open) {
+    dd.style.opacity = '0'; dd.style.transform = 'translateY(-6px)';
+    setTimeout(() => { dd.style.display = 'none'; }, 160);
+    dd.dataset.open = '0';
+    chevron.style.transform = 'rotate(0deg)';
+  } else {
+    dd.style.display = 'block';
+    requestAnimationFrame(() => { dd.style.opacity = '1'; dd.style.transform = 'translateY(0)'; });
+    dd.dataset.open = '1';
+    chevron.style.transform = 'rotate(180deg)';
+  }
+}
+
+function closeAccountDropdown() {
+  const dd = document.getElementById('accountDropdown');
+  const chevron = document.getElementById('pbChevron');
+  if (!dd || dd.dataset.open !== '1') return;
+  dd.style.opacity = '0'; dd.style.transform = 'translateY(-6px)';
+  setTimeout(() => { dd.style.display = 'none'; }, 160);
+  dd.dataset.open = '0';
+  if (chevron) chevron.style.transform = 'rotate(0deg)';
 }
 
 // Close dropdown when clicking outside
 document.addEventListener('click', e => {
   if (!document.getElementById('pbNameRow')?.contains(e.target) &&
       !document.getElementById('accountDropdown')?.contains(e.target)) {
-    document.getElementById('accountDropdown').style.display = 'none';
-    const chevron = document.getElementById('pbChevron');
-    if (chevron) chevron.style.transform = 'rotate(0deg)';
+    closeAccountDropdown();
   }
 });
 
@@ -679,9 +697,9 @@ function activateAccount(acct) {
   C.accountId = acct.id;
   localStorage.setItem('snapinsight-accountId', acct.id);
   document.getElementById('accountPicker').style.display = 'none';
-  document.getElementById('accountDropdown').style.display = 'none';
-  const chevron = document.getElementById('pbChevron');
-  if (chevron) chevron.style.transform = 'rotate(0deg)';
+  closeAccountDropdown();
+
+  // Update profile bar
   document.getElementById('pbName').textContent = acct.name || 'My Portfolio';
   const subParts = [acct.institution_name || 'Brokerage'];
   if (acct.number) subParts.push(acct.number);
@@ -689,7 +707,23 @@ function activateAccount(acct) {
   document.getElementById('pbSub').textContent = subParts.join(' · ');
   document.getElementById('pbAvatar').textContent = (acct.institution_name || 'P')[0];
   buildAccountDropdown();
-  loadAll();
+
+  // Fade dashboard content while loading new account
+  const dash = document.getElementById('dashboard');
+  dash.style.transition = 'opacity .2s ease';
+  dash.style.opacity = '0.35';
+  dash.style.pointerEvents = 'none';
+
+  // Show spinner in refresh button
+  const refreshBtn = document.querySelector('.refresh-btn');
+  const origText = refreshBtn ? refreshBtn.textContent : '';
+  if (refreshBtn) { refreshBtn.textContent = '↻ Loading...'; refreshBtn.disabled = true; }
+
+  loadAll().finally(() => {
+    dash.style.opacity = '1';
+    dash.style.pointerEvents = '';
+    if (refreshBtn) { refreshBtn.textContent = origText; refreshBtn.disabled = false; }
+  });
 }
 
 // ── Load all data ─────────────────────────────────────────
