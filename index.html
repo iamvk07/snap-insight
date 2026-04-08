@@ -1588,7 +1588,7 @@ function cellBg(ret) {
 
 function renderMonthlyTable() {
   const tbody = document.getElementById('monthlyTableBody');
-  tbody.innerHTML = SP500_MONTHLY.map(m => {
+  tbody.innerHTML = SP500_MONTHLY.map((m, i) => {
     const mo = m.label.split('-')[1];
     const histAvg = MONTH_HIST_AVG[mo];
     const diff = m.ret - histAvg;
