@@ -272,11 +272,14 @@ body.light .type-other{background:rgba(0,0,0,.05);}
 .tx-val{font-family:var(--mono);font-size:13px;font-weight:600;}.tx-qty{font-size:10px;color:var(--muted);text-align:right;margin-top:1px;}
 
 /* Performance page */
-.range-tabs{display:flex;gap:4px;margin-bottom:20px;}
-.range-tab{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--card-b);background:transparent;color:var(--muted);font-family:var(--sans);transition:all .15s;}
-.range-tab:hover{color:var(--ink);}
-.range-tab.active{background:rgba(99,102,241,.12);color:var(--accent);border-color:rgba(99,102,241,.3);}
-.perf-chart-wrap{position:relative;height:300px;}
+.perf-bar-wrap{position:relative;height:180px;}
+.perf-table{width:100%;border-collapse:collapse;margin-top:16px;}
+.perf-table th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--card-b);text-align:left;}
+.perf-table th:not(:first-child){text-align:right;}
+.perf-table td{padding:0;border-bottom:1px solid var(--card-b);font-size:13px;}
+.perf-table tr:last-child td{border-bottom:none;}
+.perf-td{padding:10px 12px;display:block;}
+.perf-cell{padding:10px 14px;font-family:var(--mono);font-size:13px;font-weight:600;text-align:right;border-radius:4px;}
 
 /* Account picker (first time) */
 #accountPicker{margin-bottom:20px;}
@@ -499,50 +502,61 @@ body.light .type-other{background:rgba(0,0,0,.05);}
       <div id="page-performance" class="page">
         <div class="page-header">
           <h2>Performance</h2>
-          <p>SPY benchmark performance over selected period</p>
+          <p>S&amp;P 500 historical monthly returns vs your portfolio</p>
         </div>
 
-        <div class="range-tabs">
-          <button class="range-tab" data-range="1W" onclick="setRange('1W')">1W</button>
-          <button class="range-tab active" data-range="1M" onclick="setRange('1M')">1M</button>
-          <button class="range-tab" data-range="3M" onclick="setRange('3M')">3M</button>
-          <button class="range-tab" data-range="6M" onclick="setRange('6M')">6M</button>
-          <button class="range-tab" data-range="1Y" onclick="setRange('1Y')">1Y</button>
+        <!-- Summary stats -->
+        <div class="g3 mb-20">
+          <div class="stat-card">
+            <div class="sc-label">Your Portfolio Return</div>
+            <div class="sc-val" id="portPeriodReturn">—</div>
+            <div class="sc-sub">vs. cost basis (total)</div>
+          </div>
+          <div class="stat-card">
+            <div class="sc-label">SPY 1Y Return</div>
+            <div class="sc-val" id="spyPeriodReturn">—</div>
+            <div class="sc-sub">S&amp;P 500 ETF</div>
+          </div>
+          <div class="stat-card">
+            <div class="sc-label">vs. SPY (1Y)</div>
+            <div class="sc-val" id="vsSpy">—</div>
+            <div class="sc-sub">Alpha (approx.)</div>
+          </div>
         </div>
 
+        <!-- Monthly bar chart -->
         <div class="card mb-16">
           <div class="card-hdr">
-            <span style="font-size:14px;">📈</span>
-            <span class="card-title">SPY (S&amp;P 500 ETF)</span>
-            <span class="card-badge" id="perfBadge">—</span>
+            <span style="font-size:14px;">📊</span>
+            <span class="card-title">S&amp;P 500 Monthly Returns</span>
+            <span class="card-badge" id="perfBadge">Loading...</span>
           </div>
           <div class="card-body">
-            <div class="perf-chart-wrap"><canvas id="perfChart"></canvas></div>
+            <div class="perf-bar-wrap"><canvas id="perfChart"></canvas></div>
           </div>
         </div>
 
-        <!-- Stats row for performance page -->
-        <div class="g3">
-          <div class="card">
-            <div class="card-body">
-              <div class="sc-label">SPY Return (Period)</div>
-              <div class="sc-val" id="spyPeriodReturn" style="font-size:20px;">—</div>
-              <div class="sc-sub">S&amp;P 500 ETF</div>
-            </div>
+        <!-- Monthly returns table -->
+        <div class="card">
+          <div class="card-hdr">
+            <span style="font-size:14px;">📋</span>
+            <span class="card-title">Historical Return vs S&amp;P 500</span>
+            <span style="font-size:10px;color:var(--muted);margin-left:auto;">SPY as S&amp;P 500 proxy</span>
           </div>
-          <div class="card">
-            <div class="card-body">
-              <div class="sc-label">Your Portfolio Return</div>
-              <div class="sc-val" id="portPeriodReturn" style="font-size:20px;">—</div>
-              <div class="sc-sub">vs. cost basis</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-body">
-              <div class="sc-label">vs. SPY</div>
-              <div class="sc-val" id="vsSpy" style="font-size:20px;">—</div>
-              <div class="sc-sub">Alpha (approx.)</div>
-            </div>
+          <div class="card-body" style="padding:0;">
+            <table class="perf-table">
+              <thead>
+                <tr>
+                  <th style="padding:10px 16px;">Period</th>
+                  <th style="text-align:right;padding:10px 16px;">Your Portfolio</th>
+                  <th style="text-align:right;padding:10px 16px;">S&amp;P 500</th>
+                  <th style="text-align:right;padding:10px 16px;">vs S&amp;P 500</th>
+                </tr>
+              </thead>
+              <tbody id="monthlyTableBody">
+                <tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">Loading...</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -586,28 +600,7 @@ body.light .type-other{background:rgba(0,0,0,.05);}
       <div id="page-analysis" class="page">
         <div class="page-header">
           <h2>Analysis</h2>
-          <p>Risk metrics, benchmark comparison, and what-if scenarios</p>
-        </div>
-
-        <!-- What if SPY card -->
-        <div class="whatif-card mb-16" id="whatIfCard">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin-bottom:12px;">✦ What if you had invested in S&amp;P 500?</div>
-          <div class="wi-row">
-            <div class="wi-col">
-              <div class="wi-lbl">Your Portfolio Today</div>
-              <div class="wi-val" id="wiActual">—</div>
-              <div class="wi-sub" id="wiActualSub">Total portfolio value</div>
-            </div>
-            <div class="wi-col">
-              <div class="wi-lbl">If Invested in SPY (1Y)</div>
-              <div class="wi-val" id="wiSpy">—</div>
-              <div class="wi-sub" id="wiSpySub">Using same cost basis</div>
-            </div>
-          </div>
-          <div class="wi-diff">
-            <span id="wiDiffBadge" class="wi-badge">—</span>
-            <span id="wiDiffText" style="color:var(--muted);font-size:12px;">Calculating...</span>
-          </div>
+          <p>Risk metrics, benchmark comparison, and portfolio health</p>
         </div>
 
         <!-- Benchmark + Risk -->
@@ -673,7 +666,6 @@ let C = {};
 let allocChartInstance = null;
 let perfChartInstance = null;
 let _allAccounts = [];
-let _currentRange = '1M';
 let _totalInvested = 0;
 let _portfolioValue = 0;
 const PROXY = 'https://snapinsight-proxy.onrender.com';
@@ -759,8 +751,7 @@ function showPage(name) {
   const titles = { overview:'Overview', performance:'Performance', allocation:'Allocation', analysis:'Analysis', transactions:'Transactions' };
   document.getElementById('topbarTitle').textContent = titles[name] || name;
   closeSidebar();
-  if (name === 'performance') loadPerformanceChart(_currentRange);
-  if (name === 'analysis') loadWhatIfSPY();
+  if (name === 'performance') loadPerformanceChart();
 }
 
 // ── API helpers ───────────────────────────────────────────
@@ -1021,9 +1012,9 @@ async function loadMarketData() {
   renderBenchmark(benchmark, quotes);
   renderRiskMetrics(quotes, pos);
   renderSectorExposure(quotes, pos);
-  // Refresh analysis page if visible
+  // Refresh performance page if visible
   const activePage = document.querySelector('.page.active');
-  if (activePage && activePage.id === 'page-analysis') loadWhatIfSPY();
+  if (activePage && activePage.id === 'page-performance') loadPerformanceChart();
 }
 
 function sectorColor(chg) {
@@ -1378,136 +1369,101 @@ function renderTx(txs) {
   }).join('');
 }
 
-// ── Performance Chart ─────────────────────────────────────
-function setRange(range) {
-  _currentRange = range;
-  document.querySelectorAll('.range-tab').forEach(t => t.classList.toggle('active', t.dataset.range === range));
-  loadPerformanceChart(range);
-}
+// ── Performance Chart + Monthly Table ────────────────────
+let _monthlyData = null;
 
-async function loadPerformanceChart(range = _currentRange) {
+async function loadPerformanceChart() {
   const badge = document.getElementById('perfBadge');
   badge.textContent = 'Loading...';
   try {
-    const data = await fetch(`${PROXY}/market/spy-history?range=${range}`).then(r => r.json());
-    if (!data.prices || !data.prices.length) {
-      badge.textContent = 'No data';
-      return;
-    }
-    const basePrice = data.prices[0];
-    const normalised = data.prices.map(p => ((p - basePrice) / basePrice * 100));
-    const spyReturn = normalised[normalised.length - 1];
-    badge.textContent = `${spyReturn >= 0 ? '+' : ''}${spyReturn.toFixed(2)}% (${range})`;
-    document.getElementById('spyPeriodReturn').textContent = `${spyReturn >= 0 ? '+' : ''}${spyReturn.toFixed(2)}%`;
-    document.getElementById('spyPeriodReturn').style.color = spyReturn >= 0 ? 'var(--green)' : 'var(--red)';
+    const data = await fetch(`${PROXY}/market/spy-monthly`).then(r => r.json());
+    if (!data.months || !data.months.length) { badge.textContent = 'No data'; return; }
+    _monthlyData = data.months;
 
-    // vs SPY
+    // SPY 1Y return = sum of last 12 monthly returns (approximate)
+    const last12 = data.months.slice(0, 12);
+    const spy1YReturn = last12.reduce((s, m) => s + m.ret, 0);
+    badge.textContent = `${last12.length} months loaded`;
+
+    // Update stat cards
+    document.getElementById('spyPeriodReturn').textContent = `${spy1YReturn >= 0 ? '+' : ''}${spy1YReturn.toFixed(2)}%`;
+    document.getElementById('spyPeriodReturn').style.color = spy1YReturn >= 0 ? 'var(--green)' : 'var(--red)';
     const portRet = _totalInvested > 0 ? (_portfolioValue - _totalInvested) / _totalInvested * 100 : null;
     if (portRet !== null) {
-      const vs = portRet - spyReturn;
+      const vs = portRet - spy1YReturn;
       document.getElementById('vsSpy').textContent = `${vs >= 0 ? '+' : ''}${vs.toFixed(2)}%`;
       document.getElementById('vsSpy').style.color = vs >= 0 ? 'var(--green)' : 'var(--red)';
     }
 
+    // Bar chart (most recent 12 months, chronological)
+    const chartMonths = [...last12].reverse();
     const isDark = !document.body.classList.contains('light');
-    const gridColor = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)';
+    const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
     const textColor = isDark ? 'rgba(232,232,242,.45)' : 'rgba(17,17,24,.45)';
 
     const ctx = document.getElementById('perfChart').getContext('2d');
     if (perfChartInstance) perfChartInstance.destroy();
-
-    const grad = ctx.createLinearGradient(0, 0, 0, 300);
-    grad.addColorStop(0, spyReturn >= 0 ? 'rgba(99,102,241,.25)' : 'rgba(239,68,68,.2)');
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-
     perfChartInstance = new Chart(ctx, {
-      type: 'line',
+      type: 'bar',
       data: {
-        labels: data.dates,
+        labels: chartMonths.map(m => m.label),
         datasets: [{
-          label: 'SPY',
-          data: normalised,
-          borderColor: spyReturn >= 0 ? '#6366f1' : '#ef4444',
-          backgroundColor: grad,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          fill: true,
-          tension: 0.3
+          label: 'S&P 500',
+          data: chartMonths.map(m => m.ret),
+          backgroundColor: chartMonths.map(m => m.ret >= 0 ? 'rgba(16,185,129,.75)' : 'rgba(239,68,68,.75)'),
+          borderRadius: 4, borderSkipped: false
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         interaction: { intersect: false, mode: 'index' },
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => ` SPY: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(2)}%`,
-              title: ctx => ctx[0].label
-            }
-          }
+          tooltip: { callbacks: { label: c => ` S&P 500: ${c.parsed.y >= 0 ? '+' : ''}${c.parsed.y.toFixed(2)}%` } }
         },
         scales: {
-          x: {
-            grid: { color: gridColor },
-            ticks: { color: textColor, maxTicksLimit: 8, font: { family: 'JetBrains Mono', size: 10 } }
-          },
-          y: {
-            grid: { color: gridColor },
-            ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 }, callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' }
-          }
+          x: { grid: { display: false }, ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 }, callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' } }
         }
       }
     });
+
+    renderMonthlyTable(data.months, portRet);
   } catch(e) {
     badge.textContent = 'Error';
+    document.getElementById('monthlyTableBody').innerHTML = `<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--red);font-size:13px;">${e.message}</td></tr>`;
   }
 }
 
-// ── What If SPY ───────────────────────────────────────────
-async function loadWhatIfSPY() {
-  const wiActual = document.getElementById('wiActual');
-  const wiSpy = document.getElementById('wiSpy');
-  const wiBadge = document.getElementById('wiDiffBadge');
-  const wiText = document.getElementById('wiDiffText');
+function cellBg(ret) {
+  const a = Math.min(Math.abs(ret) / 5, 1);
+  return ret >= 0
+    ? `rgba(16,185,129,${0.15 + a * 0.6})`
+    : `rgba(239,68,68,${0.15 + a * 0.6})`;
+}
 
-  if (_portfolioValue <= 0 || _totalInvested <= 0) {
-    wiActual.textContent = '—';
-    wiSpy.textContent = '—';
-    wiBadge.textContent = '—';
-    wiText.textContent = 'No portfolio data yet';
-    return;
-  }
+function renderMonthlyTable(months, portTotalRet) {
+  const tbody = document.getElementById('monthlyTableBody');
+  if (!months.length) { tbody.innerHTML = '<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--muted);font-size:13px;">No data</td></tr>'; return; }
 
-  wiActual.textContent = '$' + fmt(_portfolioValue);
-  document.getElementById('wiActualSub').textContent = `Total value (cost basis: $${fmt(_totalInvested)})`;
-
-  try {
-    const data = await fetch(`${PROXY}/market/spy-history?range=1Y`).then(r => r.json());
-    if (!data.prices || !data.prices.length) {
-      wiSpy.textContent = '—';
-      wiText.textContent = 'SPY data unavailable';
-      return;
-    }
-    const spy1YReturn = (data.prices[data.prices.length - 1] - data.prices[0]) / data.prices[0];
-    const whatIfValue = _totalInvested * (1 + spy1YReturn);
-    const diff = _portfolioValue - whatIfValue;
-    const diffPct = Math.abs(whatIfValue > 0 ? diff / whatIfValue * 100 : 0);
-
-    wiSpy.textContent = '$' + fmt(whatIfValue);
-    document.getElementById('wiSpySub').textContent = `SPY 1Y return: ${spy1YReturn >= 0 ? '+' : ''}${(spy1YReturn * 100).toFixed(2)}%`;
-
-    wiBadge.className = 'wi-badge ' + (diff >= 0 ? 'pos' : 'neg');
-    wiBadge.textContent = `${diff >= 0 ? '+' : '-'}$${fmt(Math.abs(diff))} (${diffPct.toFixed(1)}%)`;
-    wiText.textContent = diff >= 0
-      ? `Your portfolio outperformed SPY by $${fmt(Math.abs(diff))} over the past year.`
-      : `SPY would have been $${fmt(Math.abs(diff))} more over the past year.`;
-  } catch(e) {
-    wiSpy.textContent = '—';
-    wiText.textContent = 'Could not load SPY data';
-  }
+  // We only have portfolio TOTAL return, not per-month — show it for latest month row, "—" for others
+  const latestLabel = months[0]?.label;
+  tbody.innerHTML = months.map((m, i) => {
+    const spyCell = `<div class="perf-cell" style="background:${cellBg(m.ret)};color:#fff;">${m.ret >= 0 ? '+' : ''}${m.ret.toFixed(2)}%</div>`;
+    const portCell = (i === 0 && portTotalRet != null)
+      ? `<div class="perf-cell" style="background:${cellBg(portTotalRet)};color:#fff;">${portTotalRet >= 0 ? '+' : ''}${portTotalRet.toFixed(2)}%</div>`
+      : `<div class="perf-cell" style="color:var(--muted);">—</div>`;
+    const vs = (i === 0 && portTotalRet != null) ? portTotalRet - m.ret : null;
+    const vsCell = vs != null
+      ? `<div class="perf-cell" style="background:${cellBg(vs)};color:#fff;">${vs >= 0 ? '+' : ''}${vs.toFixed(2)}%</div>`
+      : `<div class="perf-cell" style="color:var(--muted);">—</div>`;
+    return `<tr>
+      <td style="padding:0 4px 0 16px;"><span style="font-family:var(--mono);font-size:13px;font-weight:600;">${m.label}</span></td>
+      <td style="padding:4px;">${portCell}</td>
+      <td style="padding:4px;">${spyCell}</td>
+      <td style="padding:4px 16px 4px 4px;">${vsCell}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── AI Insights ───────────────────────────────────────────
