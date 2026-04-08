@@ -286,20 +286,30 @@ body.light .type-other{background:rgba(0,0,0,.05);}
   <div id="dashboard">
 
     <!-- Profile bar -->
-    <!-- Account picker (shown when brokerage has multiple accounts) -->
+    <div class="profile-bar mb20" id="profileBar">
+      <div class="pb-avatar" id="pbAvatar">A</div>
+      <div style="position:relative;">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleAccountDropdown()" id="pbNameRow">
+          <div class="pb-name" id="pbName">Portfolio</div>
+          <span id="pbChevron" style="font-size:11px;color:var(--muted);transition:transform .2s;display:none;">▼</span>
+        </div>
+        <div class="pb-sub" id="pbSub">Loading...</div>
+        <!-- Account dropdown -->
+        <div id="accountDropdown" style="display:none;position:absolute;top:100%;left:0;margin-top:8px;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-sm);min-width:260px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.4);">
+          <div id="accountDropdownList"></div>
+        </div>
+      </div>
+      <div class="pb-right">
+        <button class="refresh-btn" onclick="refreshData()">↻ Refresh</button>
+        <button class="disconnect-btn" onclick="disconnect()">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- Legacy full-page picker (hidden, kept for first-load with no saved account) -->
     <div id="accountPicker" style="display:none;margin-bottom:20px;">
       <div class="panel">
         <div class="ph"><span style="font-size:14px;">🏦</span><span class="ph-title">Select Account</span></div>
         <div class="pb2" id="accountList"></div>
-      </div>
-    </div>
-
-    <div class="profile-bar mb20" id="profileBar">
-      <div class="pb-avatar" id="pbAvatar">A</div>
-      <div><div class="pb-name" id="pbName">Portfolio</div><div class="pb-sub" id="pbSub">Loading...</div></div>
-      <div class="pb-right">
-        <button class="refresh-btn" onclick="refreshData()">↻ Refresh</button>
-        <button class="disconnect-btn" onclick="disconnect()">Disconnect</button>
       </div>
     </div>
 
@@ -599,7 +609,48 @@ async function connect() {
 }
 
 // ── Account selection ─────────────────────────────────────
+let _allAccounts = [];
+
+function buildAccountDropdown() {
+  const chevron = document.getElementById('pbChevron');
+  const list = document.getElementById('accountDropdownList');
+  if (_allAccounts.length <= 1) { chevron.style.display = 'none'; return; }
+  chevron.style.display = 'inline';
+  list.innerHTML = _allAccounts.map(a => {
+    const isActive = a.id === C.accountId;
+    const sub = [a.institution_name || ''];
+    if (a.number) sub.push(a.number);
+    if (a.raw_type) sub.push(a.raw_type);
+    return `<div onclick="activateAccount(${JSON.stringify(a).replace(/"/g, '&quot;')})" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;transition:background .15s;border-bottom:1px solid var(--card-border);${isActive ? 'background:var(--card-hover);' : ''}" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background='${isActive ? 'var(--card-hover)' : 'transparent'}'">
+      <div>
+        <div style="font-weight:700;font-size:13px;">${a.name || 'Account'}${isActive ? ' <span style="color:var(--green);font-size:10px;margin-left:4px;">✓</span>' : ''}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px;">${sub.join(' · ')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleAccountDropdown() {
+  if (_allAccounts.length <= 1) return;
+  const dd = document.getElementById('accountDropdown');
+  const chevron = document.getElementById('pbChevron');
+  const open = dd.style.display === 'block';
+  dd.style.display = open ? 'none' : 'block';
+  chevron.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!document.getElementById('pbNameRow')?.contains(e.target) &&
+      !document.getElementById('accountDropdown')?.contains(e.target)) {
+    document.getElementById('accountDropdown').style.display = 'none';
+    const chevron = document.getElementById('pbChevron');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+  }
+});
+
 function selectAccount(accounts, forceShowPicker = false) {
+  _allAccounts = accounts;
   if (accounts.length === 1) {
     activateAccount(accounts[0]);
     return;
@@ -612,7 +663,7 @@ function selectAccount(accounts, forceShowPicker = false) {
       if (match) { activateAccount(match); return; }
     }
   }
-  // Multiple accounts — show picker
+  // Show full-page picker for first time
   document.getElementById('accountPicker').style.display = 'block';
   document.getElementById('accountList').innerHTML = accounts.map(a => `
     <div onclick="activateAccount(${JSON.stringify(a).replace(/"/g, '&quot;')})" style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--card-border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background='transparent'">
@@ -620,7 +671,7 @@ function selectAccount(accounts, forceShowPicker = false) {
         <div style="font-weight:700;font-size:14px;">${a.name || 'Account'}</div>
         <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.institution_name || ''}${a.number ? ' · ' + a.number : ''}${a.raw_type ? ' · ' + a.raw_type : ''}</div>
       </div>
-      <div style="color:var(--blue);font-size:13px;font-weight:600;">Select →</div>
+      <div style="font-size:13px;font-weight:600;">Select →</div>
     </div>`).join('');
 }
 
@@ -628,12 +679,16 @@ function activateAccount(acct) {
   C.accountId = acct.id;
   localStorage.setItem('snapinsight-accountId', acct.id);
   document.getElementById('accountPicker').style.display = 'none';
+  document.getElementById('accountDropdown').style.display = 'none';
+  const chevron = document.getElementById('pbChevron');
+  if (chevron) chevron.style.transform = 'rotate(0deg)';
   document.getElementById('pbName').textContent = acct.name || 'My Portfolio';
   const subParts = [acct.institution_name || 'Brokerage'];
   if (acct.number) subParts.push(acct.number);
   if (acct.raw_type) subParts.push(acct.raw_type);
   document.getElementById('pbSub').textContent = subParts.join(' · ');
   document.getElementById('pbAvatar').textContent = (acct.institution_name || 'P')[0];
+  buildAccountDropdown();
   loadAll();
 }
 
