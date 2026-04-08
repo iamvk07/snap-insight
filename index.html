@@ -563,7 +563,7 @@ body.light .type-other{background:rgba(0,0,0,.05);}
                 <tr>
                   <th style="padding:10px 16px;">Month</th>
                   <th style="text-align:center;padding:10px 16px;">S&amp;P 500 Return</th>
-                  <th style="text-align:right;padding:10px 16px;">Market Signal</th>
+                  <th style="text-align:right;padding:10px 16px;">vs Historical Avg</th>
                 </tr>
               </thead>
               <tbody id="monthlyTableBody">
@@ -581,7 +581,7 @@ body.light .type-other{background:rgba(0,0,0,.05);}
                 <tr>
                   <th style="padding:10px 16px;">Year</th>
                   <th style="text-align:center;padding:10px 16px;">S&amp;P 500 Return</th>
-                  <th style="text-align:right;padding:10px 16px;">Market Signal</th>
+                  <th style="text-align:right;padding:10px 16px;">Market Regime</th>
                 </tr>
               </thead>
               <tbody id="yearlyTableBody">
@@ -1482,6 +1482,23 @@ function loadPerformanceChart() {
   else renderYearlyChart();
 }
 
+// Long-run S&P 500 average monthly return (1950–2024, price total return)
+// Sept is historically the worst month; Apr/Nov/Dec best
+const MONTH_HIST_AVG = {
+  '01': 1.1, '02':-0.2, '03': 0.9, '04': 1.5, '05': 0.1, '06':-0.2,
+  '07': 1.0, '08': 0.1, '09':-0.8, '10': 0.7, '11': 1.4, '12': 1.5
+};
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtMonthShort(label) {
+  const [yr, mo] = label.split('-');
+  return `${MONTH_NAMES[+mo-1]} '${yr.slice(2)}`;
+}
+function fmtMonthFull(label) {
+  const [yr, mo] = label.split('-');
+  return `${MONTH_NAMES[+mo-1]} ${yr}`;
+}
+
 function renderMonthlyChart() {
   // Last 12 full months (skip partial current month), chronological
   const chartMonths = [...SP500_MONTHLY.slice(1, 13)].reverse();
@@ -1493,7 +1510,7 @@ function renderMonthlyChart() {
   perfChartInstance = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: chartMonths.map(m => m.label),
+      labels: chartMonths.map(m => fmtMonthShort(m.label)),
       datasets: [{ label:'S&P 500', data: chartMonths.map(m => m.ret),
         backgroundColor: chartMonths.map(m => m.ret >= 0 ? 'rgba(16,185,129,.8)' : 'rgba(239,68,68,.8)'),
         borderRadius: 4, borderSkipped: false }]
@@ -1512,7 +1529,7 @@ function renderMonthlyChart() {
 }
 
 function renderYearlyChart() {
-  const years = [...SP500_YEARLY].reverse(); // oldest first for chart
+  const years = [...SP500_YEARLY].reverse();
   const isDark = !document.body.classList.contains('light');
   const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
   const textColor = isDark ? 'rgba(232,232,242,.45)' : 'rgba(17,17,24,.45)';
@@ -1546,33 +1563,38 @@ function cellBg(ret) {
     : `rgba(239,68,68,${0.2 + a * 0.65})`;
 }
 
-function marketSignal(ret, yearly = false) {
-  if (yearly) return ret >= 20 ? '🚀 Bull Run' : ret >= 8 ? '📈 Strong' : ret >= 0 ? '➕ Positive' : ret >= -10 ? '📉 Weak' : '🐻 Bear';
-  return ret >= 3 ? '📈 Strong' : ret >= 0 ? '➕ Positive' : ret >= -3 ? '📉 Weak' : '🔴 Down';
-}
-
 function renderMonthlyTable() {
   const tbody = document.getElementById('monthlyTableBody');
   tbody.innerHTML = SP500_MONTHLY.map(m => {
-    const sign = m.ret >= 0 ? '+' : '';
-    const sigColor = m.ret >= 0 ? 'var(--green)' : 'var(--red)';
+    const mo = m.label.split('-')[1];
+    const histAvg = MONTH_HIST_AVG[mo];
+    const diff = m.ret - histAvg;
+    const diffColor = diff >= 0 ? 'var(--green)' : 'var(--red)';
+    const diffStr = `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}%`;
+    const avgStr = `${histAvg >= 0 ? '+' : ''}${histAvg.toFixed(1)}%`;
+    const vsHtml = `<span style="color:${diffColor};font-weight:700;">${diffStr}</span>
+      <span style="color:var(--muted);font-size:10px;"> vs hist. avg ${avgStr}</span>`;
     return `<tr>
-      <td style="padding:10px 16px;"><span style="font-family:var(--mono);font-size:13px;font-weight:600;">${m.label}</span></td>
-      <td style="padding:4px 16px;text-align:center;"><div class="perf-cell" style="background:${cellBg(m.ret)};color:#fff;display:inline-block;min-width:100px;text-align:center;">${sign}${m.ret.toFixed(2)}%</div></td>
-      <td style="padding:10px 16px;text-align:right;font-size:11px;color:${sigColor};">${marketSignal(m.ret)}</td>
+      <td style="padding:10px 16px;font-weight:600;">${fmtMonthFull(m.label)}</td>
+      <td style="padding:4px 16px;text-align:center;"><div class="perf-cell" style="background:${cellBg(m.ret)};color:#fff;display:inline-block;min-width:100px;text-align:center;">${m.ret >= 0 ? '+' : ''}${m.ret.toFixed(2)}%</div></td>
+      <td style="padding:10px 16px;text-align:right;font-size:12px;">${vsHtml}</td>
     </tr>`;
   }).join('');
+}
+
+function yearSignal(ret) {
+  return ret >= 20 ? 'Bull Run' : ret >= 8 ? 'Strong' : ret >= 0 ? 'Positive' : ret >= -10 ? 'Weak' : 'Bear Market';
 }
 
 function renderYearlyTable() {
   const tbody = document.getElementById('yearlyTableBody');
   tbody.innerHTML = SP500_YEARLY.map(y => {
-    const sign = y.ret >= 0 ? '+' : '';
     const sigColor = y.ret >= 0 ? 'var(--green)' : 'var(--red)';
+    const isYTD = y.label.includes('YTD');
     return `<tr>
-      <td style="padding:10px 16px;"><span style="font-family:var(--mono);font-size:13px;font-weight:600;">${y.label}</span>${y.label.includes('YTD') ? ' <span style="font-size:9px;background:rgba(99,102,241,.15);color:var(--accent);padding:2px 6px;border-radius:10px;">partial</span>' : ''}</td>
-      <td style="padding:4px 16px;text-align:center;"><div class="perf-cell" style="background:${cellBg(y.ret)};color:#fff;display:inline-block;min-width:100px;text-align:center;">${sign}${y.ret.toFixed(2)}%</div></td>
-      <td style="padding:10px 16px;text-align:right;font-size:11px;color:${sigColor};">${marketSignal(y.ret, true)}</td>
+      <td style="padding:10px 16px;font-weight:600;">${y.label}${isYTD ? ' <span style="font-size:9px;background:rgba(99,102,241,.15);color:var(--accent);padding:2px 6px;border-radius:10px;font-weight:600;">YTD</span>' : ''}</td>
+      <td style="padding:4px 16px;text-align:center;"><div class="perf-cell" style="background:${cellBg(y.ret)};color:#fff;display:inline-block;min-width:100px;text-align:center;">${y.ret >= 0 ? '+' : ''}${y.ret.toFixed(2)}%</div></td>
+      <td style="padding:10px 16px;text-align:right;font-size:12px;color:${sigColor};font-weight:600;">${yearSignal(y.ret)}</td>
     </tr>`;
   }).join('');
 }
