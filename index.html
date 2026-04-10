@@ -317,6 +317,28 @@ body.light .type-other{background:rgba(0,0,0,.05);}
   .stats-row{grid-template-columns:1fr 1fr;}
   .risk-grid{grid-template-columns:1fr 1fr;}
 }
+
+/* ── Holdings Controls ─────────────────────────────────── */
+.hold-controls{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--card-b);flex-wrap:wrap;}
+.hold-search{flex:1;min-width:130px;background:var(--bg);border:1.5px solid var(--card-b);border-radius:var(--radius-sm);color:var(--ink);font-family:var(--sans);font-size:12px;padding:6px 10px;outline:none;transition:border-color .15s;}
+.hold-search:focus{border-color:var(--accent);}
+.hold-sort{background:var(--bg);border:1.5px solid var(--card-b);border-radius:var(--radius-sm);color:var(--ink);font-family:var(--sans);font-size:12px;padding:6px 10px;outline:none;cursor:pointer;}
+.hold-sort option{background:var(--card);}
+.export-btn{background:transparent;border:1px solid var(--card-b);border-radius:var(--radius-sm);color:var(--muted);font-family:var(--sans);font-size:11px;font-weight:600;padding:5px 11px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.export-btn:hover{color:var(--ink);border-color:var(--accent);}
+
+/* ── Realized P&L ──────────────────────────────────────── */
+.rpnl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.rpnl-item{padding:12px 14px;background:var(--bg);border-radius:var(--radius-sm);}
+.rpnl-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:6px;}
+.rpnl-val{font-size:18px;font-weight:800;letter-spacing:-.5px;font-family:var(--mono);}
+.rpnl-sub{font-size:10px;color:var(--muted);margin-top:3px;}
+.rpnl-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--card-b);font-size:13px;}
+.rpnl-sym{font-weight:700;font-family:var(--mono);}
+.rpnl-tag{font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:10px;margin-left:6px;}
+.rpnl-tag.lt{background:rgba(16,185,129,.12);color:var(--green);}
+.rpnl-tag.st{background:rgba(245,158,11,.12);color:var(--amber);}
+@media(max-width:600px){.rpnl-grid{grid-template-columns:1fr 1fr;}.hold-controls{gap:6px;}}
 </style>
 </head>
 <body>
@@ -619,8 +641,23 @@ body.light .type-other{background:rgba(0,0,0,.05);}
 
         <!-- Full holdings table -->
         <div class="card">
-          <div class="card-hdr"><span class="card-title">Holdings</span><span class="card-badge" id="holdBadge">0 positions</span></div>
-          <div class="card-body">
+          <div class="card-hdr">
+            <span class="card-title">Holdings</span>
+            <span class="card-badge" id="holdBadge">0 positions</span>
+            <button class="export-btn" onclick="exportHoldingsCSV()" style="margin-left:auto;">↓ Export CSV</button>
+          </div>
+          <div class="hold-controls">
+            <input id="holdSearch" class="hold-search" type="text" placeholder="Search symbol or name..." oninput="filterHoldings(this.value)">
+            <select id="holdSort" class="hold-sort" onchange="sortHoldings(this.value)">
+              <option value="mv-desc">Value (High → Low)</option>
+              <option value="mv-asc">Value (Low → High)</option>
+              <option value="ret-desc">Return % (Best first)</option>
+              <option value="ret-asc">Return % (Worst first)</option>
+              <option value="alloc-desc">Allocation % (High → Low)</option>
+              <option value="sym-asc">Symbol (A → Z)</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto;">
             <table class="htable">
               <thead><tr><th>Symbol</th><th>Type</th><th>Qty</th><th>Avg Cost</th><th>Price</th><th>Market Value</th><th>Return</th><th>Allocation</th></tr></thead>
               <tbody id="holdingsBody"></tbody>
@@ -680,10 +717,26 @@ body.light .type-other{background:rgba(0,0,0,.05);}
       <div id="page-transactions" class="page">
         <div class="page-header">
           <h2>Transactions</h2>
-          <p>Your recent orders and activity</p>
+          <p>Realized P&amp;L and order history</p>
         </div>
+
+        <!-- Realized P&L summary (shown when sell orders exist) -->
+        <div class="card mb-16" id="realizedCard" style="display:none;">
+          <div class="card-hdr">
+            <span style="font-size:14px;">💰</span>
+            <span class="card-title">Realized P&amp;L</span>
+            <span style="font-size:10px;color:var(--muted);margin-left:auto;">FIFO estimate from order history</span>
+          </div>
+          <div class="card-body" id="realizedBody"></div>
+        </div>
+
+        <!-- Orders list -->
         <div class="card">
-          <div class="card-hdr"><span style="font-size:14px;">📋</span><span class="card-title">Recent Activity</span></div>
+          <div class="card-hdr">
+            <span style="font-size:14px;">📋</span>
+            <span class="card-title">Recent Activity</span>
+            <button class="export-btn" onclick="exportTxCSV()" style="margin-left:auto;">↓ Export CSV</button>
+          </div>
           <div class="card-body" id="txBody">
             <div style="font-size:13px;color:var(--muted);">Loading...</div>
           </div>
@@ -703,6 +756,12 @@ let _perfActiveTab = 'monthly';
 let _allAccounts = [];
 let _totalInvested = 0;
 let _portfolioValue = 0;
+let _allRawPositions = []; // for sort/filter/export
+let _allRawTxs = [];       // for export
+let _holdFilter = '';
+let _holdSortKey = 'mv';
+let _holdSortDir = 'desc';
+let _grand = 0;
 const PROXY = 'https://snapinsight-proxy.onrender.com';
 fetch(`${PROXY}/health`).catch(() => {});
 
@@ -1277,9 +1336,11 @@ function renderHoldings(data) {
   const totalReturnAmt = totalMV - totalCost;
   const totalReturnPct = totalCost > 0 ? (totalReturnAmt / totalCost * 100) : 0;
 
-  // Store globally for other pages
+  // Store globally for other pages + sort/filter/export
   _totalInvested = totalCost;
   _portfolioValue = grand;
+  _grand = grand;
+  _allRawPositions = pos;
 
   animateCounter(document.getElementById('totalVal'), grand, '$');
   animateCounter(document.getElementById('cashVal'), cash, '$');
@@ -1297,34 +1358,8 @@ function renderHoldings(data) {
   document.getElementById('portPeriodReturn').textContent = totalCost > 0 ? (totalReturnPct >= 0 ? '+' : '') + totalReturnPct.toFixed(2) + '%' : '—';
   document.getElementById('portPeriodReturn').style.color = totalReturnPct >= 0 ? 'var(--green)' : 'var(--red)';
 
-  // Holdings table
-  const tbody = document.getElementById('holdingsBody');
-  if (!pos.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:20px;text-align:center">No positions yet${cash > 0 ? ` — $${fmt(cash)} available to invest` : ' — add trades in your brokerage account'}</td></tr>`;
-  } else {
-    tbody.innerHTML = pos.map(p => {
-      const mv = (p.price||0) * (p.units ?? p.fractional_units ?? 0);
-      const pct = grand > 0 ? mv / grand * 100 : 0;
-      const t = getType(p);
-      const totalUnits = (p.units ?? p.fractional_units ?? 0);
-      const avgCost = p.average_purchase_price || 0;
-      const retAmt = avgCost > 0 ? (p.price - avgCost) * totalUnits : null;
-      const retPct = avgCost > 0 ? ((p.price - avgCost) / avgCost * 100) : null;
-      const retColor = retPct == null ? 'var(--muted)' : retPct >= 0 ? 'var(--green)' : 'var(--red)';
-      const retStr = retPct != null ? `<span style="color:${retColor};font-size:12px;">${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%</span><br><span style="font-size:10px;color:${retColor};">${retAmt >= 0 ? '+' : ''}$${fmt(retAmt)}</span>` : '—';
-      const pctColor = pct > 30 ? 'var(--red)' : pct > 15 ? 'var(--accent)' : 'var(--green)';
-      return `<tr>
-        <td><div class="sym">${getSym(p)}</div><div class="sym-name">${(p.symbol?.name||p.symbol?.description||'').slice(0, 28)}</div></td>
-        <td><span class="type-badge type-${t}">${t.toUpperCase()}</span></td>
-        <td>${fmt(totalUnits, 4)}</td>
-        <td>${avgCost > 0 ? '$'+fmt(avgCost) : '—'}</td>
-        <td>$${fmt(p.price)}</td>
-        <td>$${fmt(mv)}</td>
-        <td>${retStr}</td>
-        <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${pct}%;background:${pctColor}"></div></div><span style="font-family:var(--mono);font-size:11px;color:${pctColor};min-width:40px">${pct.toFixed(1)}%</span></div></td>
-      </tr>`;
-    }).join('');
-  }
+  // Holdings table — delegated to renderHoldingsTable() for sort/filter support
+  renderHoldingsTable();
 
   // Allocation donut
   const byType = {};
@@ -1413,10 +1448,127 @@ function renderHoldings(data) {
   window._pd = { pos, cash, grand, byType };
 }
 
+// ── Holdings table: sort / filter / export ────────────────
+function renderHoldingsTable() {
+  const tbody = document.getElementById('holdingsBody');
+  const pos = _allRawPositions;
+  const grand = _grand;
+  if (!pos.length) {
+    const cash = window._pd?.cash || 0;
+    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:20px;text-align:center">No positions yet${cash > 0 ? ` — $${fmt(cash)} available to invest` : ' — add trades in your brokerage account'}</td></tr>`;
+    return;
+  }
+  const q = _holdFilter.toLowerCase().trim();
+  let filtered = q ? pos.filter(p => {
+    const sym = getSym(p).toLowerCase();
+    const name = (p.symbol?.name || p.symbol?.description || '').toLowerCase();
+    return sym.includes(q) || name.includes(q);
+  }) : [...pos];
+
+  const key = _holdSortKey, dir = _holdSortDir;
+  filtered.sort((a, b) => {
+    if (key === 'sym') {
+      const va = getSym(a), vb = getSym(b);
+      return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    let va, vb;
+    if (key === 'mv' || key === 'alloc') {
+      va = (a.price||0) * (a.units ?? a.fractional_units ?? 0);
+      vb = (b.price||0) * (b.units ?? b.fractional_units ?? 0);
+    } else if (key === 'ret') {
+      va = a.average_purchase_price > 0 ? (a.price - a.average_purchase_price) / a.average_purchase_price : -Infinity;
+      vb = b.average_purchase_price > 0 ? (b.price - b.average_purchase_price) / b.average_purchase_price : -Infinity;
+    } else { va = 0; vb = 0; }
+    return dir === 'asc' ? va - vb : vb - va;
+  });
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:20px;text-align:center">No holdings match "<strong>${_holdFilter}</strong>"</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered.map(p => {
+    const mv = (p.price||0) * (p.units ?? p.fractional_units ?? 0);
+    const pct = grand > 0 ? mv / grand * 100 : 0;
+    const t = getType(p);
+    const totalUnits = (p.units ?? p.fractional_units ?? 0);
+    const avgCost = p.average_purchase_price || 0;
+    const retAmt = avgCost > 0 ? (p.price - avgCost) * totalUnits : null;
+    const retPct = avgCost > 0 ? ((p.price - avgCost) / avgCost * 100) : null;
+    const retColor = retPct == null ? 'var(--muted)' : retPct >= 0 ? 'var(--green)' : 'var(--red)';
+    const retStr = retPct != null ? `<span style="color:${retColor};font-size:12px;">${retPct >= 0 ? '+' : ''}${retPct.toFixed(2)}%</span><br><span style="font-size:10px;color:${retColor};">${retAmt >= 0 ? '+' : ''}$${fmt(retAmt)}</span>` : '—';
+    const pctColor = pct > 30 ? 'var(--red)' : pct > 15 ? 'var(--accent)' : 'var(--green)';
+    return `<tr>
+      <td><div class="sym">${getSym(p)}</div><div class="sym-name">${(p.symbol?.name||p.symbol?.description||'').slice(0, 28)}</div></td>
+      <td><span class="type-badge type-${t}">${t.toUpperCase()}</span></td>
+      <td>${fmt(totalUnits, 4)}</td>
+      <td>${avgCost > 0 ? '$'+fmt(avgCost) : '—'}</td>
+      <td>$${fmt(p.price)}</td>
+      <td>$${fmt(mv)}</td>
+      <td>${retStr}</td>
+      <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${pct}%;background:${pctColor}"></div></div><span style="font-family:var(--mono);font-size:11px;color:${pctColor};min-width:40px">${pct.toFixed(1)}%</span></div></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterHoldings(q) { _holdFilter = q; renderHoldingsTable(); }
+
+function sortHoldings(val) {
+  const parts = val.split('-');
+  _holdSortKey = parts[0];
+  _holdSortDir = parts[1] || 'desc';
+  renderHoldingsTable();
+}
+
+// ── CSV Export ────────────────────────────────────────────
+function downloadCSV(rows, filename) {
+  const csv = rows.map(r => r.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportHoldingsCSV() {
+  if (!_allRawPositions.length) return;
+  const rows = [['Symbol','Name','Type','Qty','Avg Cost ($)','Price ($)','Market Value ($)','Return (%)','Return ($)','Allocation (%)']];
+  _allRawPositions.forEach(p => {
+    const units = p.units ?? p.fractional_units ?? 0;
+    const avgCost = p.average_purchase_price || 0;
+    const mv = (p.price || 0) * units;
+    const retPct = avgCost > 0 ? ((p.price - avgCost) / avgCost * 100).toFixed(2) : '';
+    const retAmt = avgCost > 0 ? ((p.price - avgCost) * units).toFixed(2) : '';
+    const alloc = _grand > 0 ? (mv / _grand * 100).toFixed(2) : '';
+    rows.push([getSym(p), p.symbol?.name || p.symbol?.description || '', getType(p), units.toFixed(4), avgCost ? avgCost.toFixed(2) : '', (p.price||0).toFixed(2), mv.toFixed(2), retPct, retAmt, alloc]);
+  });
+  downloadCSV(rows, 'holdings.csv');
+}
+
+function exportTxCSV() {
+  if (!_allRawTxs.length) return;
+  const rows = [['Date','Symbol','Action','Qty','Price ($)','Value ($)','Status']];
+  _allRawTxs.forEach(tx => {
+    const rawSym = tx.universal_symbol?.symbol || tx.symbol?.symbol || '';
+    const sym = typeof rawSym === 'object' ? (rawSym.symbol || rawSym.description || '') : String(rawSym);
+    const qty = tx.filled_quantity || tx.total_quantity || 0;
+    const price = tx.execution_price || tx.limit_price || tx.stop_price || 0;
+    const val = qty && price ? (qty * price).toFixed(2) : '';
+    const date = tx.time_placed ? new Date(tx.time_placed).toLocaleDateString() : '';
+    rows.push([date, sym, tx.action || '', qty || '', price ? Number(price).toFixed(2) : '', val, tx.status || '']);
+  });
+  downloadCSV(rows, 'transactions.csv');
+}
+
 // ── Transactions ──────────────────────────────────────────
 function renderTx(txs) {
+  _allRawTxs = Array.isArray(txs) ? txs : [];
   const el = document.getElementById('txBody');
-  const list = Array.isArray(txs) ? txs : [];
+  const list = _allRawTxs;
+
+  // Realized P&L
+  const realized = computeRealizedPnL(list);
+  renderRealizedPnL(realized);
+
   if (!list.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted)">No recent transactions</div>'; return; }
   el.innerHTML = list.slice(0, 20).map(tx => {
     const action = (tx.action||'').toLowerCase();
@@ -1434,6 +1586,102 @@ function renderTx(txs) {
       <div style="text-align:right;"><div class="tx-val ${t==='sell'?'down':'up'}">${val>0?'$'+fmt(Math.abs(val)):(tx.status||'—')}</div><div class="tx-qty">${qty?fmt(qty,4)+' units':''}</div></div>
     </div>`;
   }).join('');
+}
+
+// ── Realized P&L (FIFO) ───────────────────────────────────
+function computeRealizedPnL(txs) {
+  const buyQueues = {};
+  const symbolResults = {};
+  const result = { net: 0, gains: 0, losses: 0, shortTerm: 0, longTerm: 0, bySymbol: [] };
+  const sorted = [...txs].sort((a, b) => new Date(a.time_placed||0) - new Date(b.time_placed||0));
+
+  sorted.forEach(tx => {
+    const action = (tx.action||'').toLowerCase();
+    const isBuy = action.includes('buy');
+    const isSell = action.includes('sell');
+    if (!isBuy && !isSell) return;
+    const rawSym = tx.universal_symbol?.symbol || tx.symbol?.symbol || 'Unknown';
+    const sym = typeof rawSym === 'object' ? (rawSym.symbol || rawSym.description || '?') : String(rawSym);
+    const qty = parseFloat(tx.filled_quantity || tx.total_quantity || 0);
+    const price = parseFloat(tx.execution_price || tx.limit_price || tx.stop_price || 0);
+    if (!qty || !price) return;
+
+    if (isBuy) {
+      if (!buyQueues[sym]) buyQueues[sym] = [];
+      buyQueues[sym].push({ qty, price, date: new Date(tx.time_placed || 0) });
+    } else {
+      if (!buyQueues[sym] || !buyQueues[sym].length) return;
+      let remaining = qty;
+      let costBasis = 0;
+      let isLongTerm = true;
+      const sellDate = new Date(tx.time_placed || 0);
+      while (remaining > 0 && buyQueues[sym].length > 0) {
+        const lot = buyQueues[sym][0];
+        const used = Math.min(remaining, lot.qty);
+        costBasis += used * lot.price;
+        if ((sellDate - lot.date) / 86400000 < 365) isLongTerm = false;
+        lot.qty -= used;
+        remaining -= used;
+        if (lot.qty < 0.0001) buyQueues[sym].shift();
+      }
+      const pnl = qty * price - costBasis;
+      result.net += pnl;
+      if (pnl >= 0) result.gains += pnl; else result.losses += pnl;
+      if (isLongTerm) result.longTerm += pnl; else result.shortTerm += pnl;
+      if (!symbolResults[sym]) symbolResults[sym] = { pnl: 0, isLong: isLongTerm };
+      symbolResults[sym].pnl += pnl;
+    }
+  });
+
+  result.bySymbol = Object.entries(symbolResults)
+    .map(([sym, d]) => ({ sym, pnl: d.pnl, isLong: d.isLong }))
+    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
+  return result;
+}
+
+function renderRealizedPnL(r) {
+  const card = document.getElementById('realizedCard');
+  if (!r.bySymbol.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const netCol = r.net >= 0 ? 'var(--green)' : 'var(--red)';
+  const stCol  = r.shortTerm >= 0 ? 'var(--green)' : 'var(--red)';
+  const ltCol  = r.longTerm  >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('realizedBody').innerHTML = `
+    <div class="rpnl-grid">
+      <div class="rpnl-item">
+        <div class="rpnl-lbl">Net Realized</div>
+        <div class="rpnl-val" style="color:${netCol}">${r.net>=0?'+':''}$${fmt(Math.abs(r.net))}</div>
+        <div class="rpnl-sub">All closed positions</div>
+      </div>
+      <div class="rpnl-item">
+        <div class="rpnl-lbl">Total Gains</div>
+        <div class="rpnl-val" style="color:var(--green)">+$${fmt(r.gains)}</div>
+        <div class="rpnl-sub">From profitable sells</div>
+      </div>
+      <div class="rpnl-item">
+        <div class="rpnl-lbl">Short-Term</div>
+        <div class="rpnl-val" style="color:${stCol}">${r.shortTerm>=0?'+':''}$${fmt(Math.abs(r.shortTerm))}</div>
+        <div class="rpnl-sub">Held &lt; 1 year</div>
+      </div>
+      <div class="rpnl-item">
+        <div class="rpnl-lbl">Long-Term</div>
+        <div class="rpnl-val" style="color:${ltCol}">${r.longTerm>=0?'+':''}$${fmt(Math.abs(r.longTerm))}</div>
+        <div class="rpnl-sub">Held ≥ 1 year</div>
+      </div>
+    </div>
+    <div class="rpnl-row" style="border-top:none;padding-bottom:2px;">
+      <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);">By Symbol</span>
+      <span style="font-size:10px;color:var(--muted2);">Short-term = ordinary income tax · Long-term = lower rate</span>
+    </div>
+    ${r.bySymbol.slice(0, 6).map(s => {
+      const col = s.pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const tag = s.isLong ? '<span class="rpnl-tag lt">Long-term</span>' : '<span class="rpnl-tag st">Short-term</span>';
+      return `<div class="rpnl-row">
+        <div><span class="rpnl-sym">${s.sym}</span>${tag}</div>
+        <div style="font-family:var(--mono);font-weight:700;color:${col};">${s.pnl>=0?'+':''}$${fmt(Math.abs(s.pnl))}</div>
+      </div>`;
+    }).join('')}
+  `;
 }
 
 // ── Performance Chart + Tables ────────────────────────────
