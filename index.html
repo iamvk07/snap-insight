@@ -327,18 +327,7 @@ body.light .type-other{background:rgba(0,0,0,.05);}
 .export-btn{background:transparent;border:1px solid var(--card-b);border-radius:var(--radius-sm);color:var(--muted);font-family:var(--sans);font-size:11px;font-weight:600;padding:5px 11px;cursor:pointer;transition:all .15s;white-space:nowrap;}
 .export-btn:hover{color:var(--ink);border-color:var(--accent);}
 
-/* ── Realized P&L ──────────────────────────────────────── */
-.rpnl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
-.rpnl-item{padding:12px 14px;background:var(--bg);border-radius:var(--radius-sm);}
-.rpnl-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:6px;}
-.rpnl-val{font-size:18px;font-weight:800;letter-spacing:-.5px;font-family:var(--mono);}
-.rpnl-sub{font-size:10px;color:var(--muted);margin-top:3px;}
-.rpnl-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-top:1px solid var(--card-b);font-size:13px;}
-.rpnl-sym{font-weight:700;font-family:var(--mono);}
-.rpnl-tag{font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:10px;margin-left:6px;}
-.rpnl-tag.lt{background:rgba(16,185,129,.12);color:var(--green);}
-.rpnl-tag.st{background:rgba(245,158,11,.12);color:var(--amber);}
-@media(max-width:600px){.rpnl-grid{grid-template-columns:1fr 1fr;}.hold-controls{gap:6px;}}
+@media(max-width:600px){.hold-controls{gap:6px;}}
 </style>
 </head>
 <body>
@@ -717,17 +706,7 @@ body.light .type-other{background:rgba(0,0,0,.05);}
       <div id="page-transactions" class="page">
         <div class="page-header">
           <h2>Transactions</h2>
-          <p>Realized P&amp;L and order history</p>
-        </div>
-
-        <!-- Realized P&L summary (shown when sell orders exist) -->
-        <div class="card mb-16" id="realizedCard" style="display:none;">
-          <div class="card-hdr">
-            <span style="font-size:14px;">💰</span>
-            <span class="card-title">Realized P&amp;L</span>
-            <span style="font-size:10px;color:var(--muted);margin-left:auto;">FIFO estimate from order history</span>
-          </div>
-          <div class="card-body" id="realizedBody"></div>
+          <p>Your recent orders and activity</p>
         </div>
 
         <!-- Orders list -->
@@ -1565,10 +1544,6 @@ function renderTx(txs) {
   const el = document.getElementById('txBody');
   const list = _allRawTxs;
 
-  // Realized P&L
-  const realized = computeRealizedPnL(list);
-  renderRealizedPnL(realized);
-
   if (!list.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted)">No recent transactions</div>'; return; }
   el.innerHTML = list.slice(0, 20).map(tx => {
     const action = (tx.action||'').toLowerCase();
@@ -1586,102 +1561,6 @@ function renderTx(txs) {
       <div style="text-align:right;"><div class="tx-val ${t==='sell'?'down':'up'}">${val>0?'$'+fmt(Math.abs(val)):(tx.status||'—')}</div><div class="tx-qty">${qty?fmt(qty,4)+' units':''}</div></div>
     </div>`;
   }).join('');
-}
-
-// ── Realized P&L (FIFO) ───────────────────────────────────
-function computeRealizedPnL(txs) {
-  const buyQueues = {};
-  const symbolResults = {};
-  const result = { net: 0, gains: 0, losses: 0, shortTerm: 0, longTerm: 0, bySymbol: [] };
-  const sorted = [...txs].sort((a, b) => new Date(a.time_placed||0) - new Date(b.time_placed||0));
-
-  sorted.forEach(tx => {
-    const action = (tx.action||'').toLowerCase();
-    const isBuy = action.includes('buy');
-    const isSell = action.includes('sell');
-    if (!isBuy && !isSell) return;
-    const rawSym = tx.universal_symbol?.symbol || tx.symbol?.symbol || 'Unknown';
-    const sym = typeof rawSym === 'object' ? (rawSym.symbol || rawSym.description || '?') : String(rawSym);
-    const qty = parseFloat(tx.filled_quantity || tx.total_quantity || 0);
-    const price = parseFloat(tx.execution_price || tx.limit_price || tx.stop_price || 0);
-    if (!qty || !price) return;
-
-    if (isBuy) {
-      if (!buyQueues[sym]) buyQueues[sym] = [];
-      buyQueues[sym].push({ qty, price, date: new Date(tx.time_placed || 0) });
-    } else {
-      if (!buyQueues[sym] || !buyQueues[sym].length) return;
-      let remaining = qty;
-      let costBasis = 0;
-      let isLongTerm = true;
-      const sellDate = new Date(tx.time_placed || 0);
-      while (remaining > 0 && buyQueues[sym].length > 0) {
-        const lot = buyQueues[sym][0];
-        const used = Math.min(remaining, lot.qty);
-        costBasis += used * lot.price;
-        if ((sellDate - lot.date) / 86400000 < 365) isLongTerm = false;
-        lot.qty -= used;
-        remaining -= used;
-        if (lot.qty < 0.0001) buyQueues[sym].shift();
-      }
-      const pnl = qty * price - costBasis;
-      result.net += pnl;
-      if (pnl >= 0) result.gains += pnl; else result.losses += pnl;
-      if (isLongTerm) result.longTerm += pnl; else result.shortTerm += pnl;
-      if (!symbolResults[sym]) symbolResults[sym] = { pnl: 0, isLong: isLongTerm };
-      symbolResults[sym].pnl += pnl;
-    }
-  });
-
-  result.bySymbol = Object.entries(symbolResults)
-    .map(([sym, d]) => ({ sym, pnl: d.pnl, isLong: d.isLong }))
-    .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
-  return result;
-}
-
-function renderRealizedPnL(r) {
-  const card = document.getElementById('realizedCard');
-  if (!r.bySymbol.length) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  const netCol = r.net >= 0 ? 'var(--green)' : 'var(--red)';
-  const stCol  = r.shortTerm >= 0 ? 'var(--green)' : 'var(--red)';
-  const ltCol  = r.longTerm  >= 0 ? 'var(--green)' : 'var(--red)';
-  document.getElementById('realizedBody').innerHTML = `
-    <div class="rpnl-grid">
-      <div class="rpnl-item">
-        <div class="rpnl-lbl">Net Realized</div>
-        <div class="rpnl-val" style="color:${netCol}">${r.net>=0?'+':''}$${fmt(Math.abs(r.net))}</div>
-        <div class="rpnl-sub">All closed positions</div>
-      </div>
-      <div class="rpnl-item">
-        <div class="rpnl-lbl">Total Gains</div>
-        <div class="rpnl-val" style="color:var(--green)">+$${fmt(r.gains)}</div>
-        <div class="rpnl-sub">From profitable sells</div>
-      </div>
-      <div class="rpnl-item">
-        <div class="rpnl-lbl">Short-Term</div>
-        <div class="rpnl-val" style="color:${stCol}">${r.shortTerm>=0?'+':''}$${fmt(Math.abs(r.shortTerm))}</div>
-        <div class="rpnl-sub">Held &lt; 1 year</div>
-      </div>
-      <div class="rpnl-item">
-        <div class="rpnl-lbl">Long-Term</div>
-        <div class="rpnl-val" style="color:${ltCol}">${r.longTerm>=0?'+':''}$${fmt(Math.abs(r.longTerm))}</div>
-        <div class="rpnl-sub">Held ≥ 1 year</div>
-      </div>
-    </div>
-    <div class="rpnl-row" style="border-top:none;padding-bottom:2px;">
-      <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);">By Symbol</span>
-      <span style="font-size:10px;color:var(--muted2);">Short-term = ordinary income tax · Long-term = lower rate</span>
-    </div>
-    ${r.bySymbol.slice(0, 6).map(s => {
-      const col = s.pnl >= 0 ? 'var(--green)' : 'var(--red)';
-      const tag = s.isLong ? '<span class="rpnl-tag lt">Long-term</span>' : '<span class="rpnl-tag st">Short-term</span>';
-      return `<div class="rpnl-row">
-        <div><span class="rpnl-sym">${s.sym}</span>${tag}</div>
-        <div style="font-family:var(--mono);font-weight:700;color:${col};">${s.pnl>=0?'+':''}$${fmt(Math.abs(s.pnl))}</div>
-      </div>`;
-    }).join('')}
-  `;
 }
 
 // ── Performance Chart + Tables ────────────────────────────
